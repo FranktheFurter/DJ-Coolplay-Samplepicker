@@ -49,6 +49,9 @@ const SLOT_CATEGORY_DEFINITIONS: SlotCategoryDefinition[] = [
   { key: "user", label: "User", start: 900, end: 999 },
 ];
 
+const DEFAULT_VIRTUAL_ROW_HEIGHT = 72;
+const VIRTUAL_OVERSCAN_ROWS = 8;
+
 function formatCount(count: number): string {
   return `${count} Sample${count === 1 ? "" : "s"}`;
 }
@@ -191,7 +194,7 @@ function createRow(
   const path = document.createElement("div");
   path.className = "sample-path";
   path.title = sample.relativePath;
-  path.textContent = sample.relativePath;
+  path.textContent = formatPathPreview(sample.relativePath);
 
   const category = document.createElement("div");
   const categoryBadge = document.createElement("span");
@@ -226,6 +229,28 @@ function createRow(
   row.append(name, path, category, actions);
 
   return row;
+}
+
+function formatPathPreview(relativePath: string): string {
+  const normalizedPath = relativePath.replace(/\\/g, "/");
+  const segments = normalizedPath
+    .split("/")
+    .map((segment) => segment.trim())
+    .filter((segment) => segment.length > 0);
+
+  if (segments.length === 0) {
+    return relativePath;
+  }
+
+  const directories = segments.length > 1 ? segments.slice(0, -1) : segments;
+  const visibleDirectories = directories.slice(0, 3);
+
+  if (visibleDirectories.length === 0) {
+    return "/";
+  }
+
+  const suffix = directories.length > visibleDirectories.length ? "/..." : "";
+  return `${visibleDirectories.join("/")}${suffix}`;
 }
 
 export function createUI(root: HTMLElement, handlers: UIHandlers): UIController {
@@ -400,6 +425,7 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
 
   const waveformBaseCanvasElement = waveformBaseCanvas;
   const waveformPlayheadCanvasElement = waveformPlayheadCanvas;
+  const resultsBodyElement = resultsBody;
   const slotCategoriesElement = slotCategories;
   const slotCounterInputElement = slotCounterInput;
   const searchInputElement = searchInput;
@@ -408,6 +434,153 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
   let latestSelectedSampleId: string | null = null;
   let latestCurrentAudioId: string | null = null;
   let playheadFrameId: number | null = null;
+  const virtualTopSpacer = document.createElement("div");
+  virtualTopSpacer.className = "results-virtual-spacer";
+  const virtualRows = document.createElement("div");
+  virtualRows.className = "results-virtual-rows";
+  const virtualBottomSpacer = document.createElement("div");
+  virtualBottomSpacer.className = "results-virtual-spacer";
+  let virtualSamples: SampleRecord[] = [];
+  let virtualSelectedSampleId: string | null = null;
+  let virtualCurrentAudioId: string | null = null;
+  let virtualRowHeight = DEFAULT_VIRTUAL_ROW_HEIGHT;
+  let virtualListMounted = false;
+  let virtualRenderFrameId: number | null = null;
+  let virtualForceRenderRequested = false;
+  let lastVirtualStartIndex = -1;
+  let lastVirtualEndIndex = -1;
+  let lastVirtualTotalCount = -1;
+  let lastVirtualSelectedSampleId: string | null = null;
+  let lastVirtualCurrentAudioId: string | null = null;
+
+  function readVirtualRowHeight(): number {
+    const value = Number.parseFloat(
+      window
+        .getComputedStyle(resultsBodyElement)
+        .getPropertyValue("--results-row-height"),
+    );
+
+    if (Number.isFinite(value) && value >= 24) {
+      return value;
+    }
+
+    return DEFAULT_VIRTUAL_ROW_HEIGHT;
+  }
+
+  function clearVirtualRenderFrame(): void {
+    if (virtualRenderFrameId !== null) {
+      window.cancelAnimationFrame(virtualRenderFrameId);
+      virtualRenderFrameId = null;
+    }
+
+    virtualForceRenderRequested = false;
+  }
+
+  function invalidateVirtualWindow(): void {
+    lastVirtualStartIndex = -1;
+    lastVirtualEndIndex = -1;
+    lastVirtualTotalCount = -1;
+    lastVirtualSelectedSampleId = null;
+    lastVirtualCurrentAudioId = null;
+  }
+
+  function ensureVirtualListMounted(): void {
+    if (virtualListMounted) {
+      return;
+    }
+
+    resultsBodyElement.replaceChildren(
+      virtualTopSpacer,
+      virtualRows,
+      virtualBottomSpacer,
+    );
+    virtualListMounted = true;
+  }
+
+  function renderVirtualRows(force = false): void {
+    if (!virtualListMounted) {
+      return;
+    }
+
+    const totalCount = virtualSamples.length;
+
+    if (totalCount === 0) {
+      virtualTopSpacer.style.height = "0px";
+      virtualBottomSpacer.style.height = "0px";
+      virtualRows.replaceChildren();
+      invalidateVirtualWindow();
+      return;
+    }
+
+    virtualRowHeight = readVirtualRowHeight();
+    const viewportHeight = Math.max(virtualRowHeight, resultsBodyElement.clientHeight);
+    const scrollTop = Math.max(0, resultsBodyElement.scrollTop);
+    const visibleCount = Math.max(1, Math.ceil(viewportHeight / virtualRowHeight));
+    const startIndex = Math.max(
+      0,
+      Math.floor(scrollTop / virtualRowHeight) - VIRTUAL_OVERSCAN_ROWS,
+    );
+    const endIndex = Math.min(
+      totalCount,
+      startIndex + visibleCount + VIRTUAL_OVERSCAN_ROWS * 2,
+    );
+
+    if (
+      !force &&
+      startIndex === lastVirtualStartIndex &&
+      endIndex === lastVirtualEndIndex &&
+      totalCount === lastVirtualTotalCount &&
+      virtualSelectedSampleId === lastVirtualSelectedSampleId &&
+      virtualCurrentAudioId === lastVirtualCurrentAudioId
+    ) {
+      return;
+    }
+
+    lastVirtualStartIndex = startIndex;
+    lastVirtualEndIndex = endIndex;
+    lastVirtualTotalCount = totalCount;
+    lastVirtualSelectedSampleId = virtualSelectedSampleId;
+    lastVirtualCurrentAudioId = virtualCurrentAudioId;
+
+    virtualTopSpacer.style.height = `${startIndex * virtualRowHeight}px`;
+    virtualBottomSpacer.style.height = `${Math.max(
+      0,
+      (totalCount - endIndex) * virtualRowHeight,
+    )}px`;
+
+    const fragment = document.createDocumentFragment();
+
+    for (let index = startIndex; index < endIndex; index += 1) {
+      const sample = virtualSamples[index];
+
+      if (!sample) {
+        continue;
+      }
+
+      fragment.append(
+        createRow(sample, virtualCurrentAudioId, virtualSelectedSampleId),
+      );
+    }
+
+    virtualRows.replaceChildren(fragment);
+  }
+
+  function scheduleVirtualRowsRender(force = false): void {
+    if (force) {
+      virtualForceRenderRequested = true;
+    }
+
+    if (virtualRenderFrameId !== null) {
+      return;
+    }
+
+    virtualRenderFrameId = window.requestAnimationFrame(() => {
+      const shouldForce = virtualForceRenderRequested;
+      virtualRenderFrameId = null;
+      virtualForceRenderRequested = false;
+      renderVirtualRows(shouldForce);
+    });
+  }
 
   function getPlayheadProgress(): number | null {
     if (
@@ -623,7 +796,28 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
     handlers.onLoopEnabledChange(target.checked);
   });
 
-  resultsBody.addEventListener("click", (event) => {
+  resultsBodyElement.addEventListener("scroll", () => {
+    if (!virtualListMounted || virtualSamples.length === 0) {
+      return;
+    }
+
+    scheduleVirtualRowsRender();
+  });
+
+  if (typeof ResizeObserver !== "undefined") {
+    const resizeObserver = new ResizeObserver(() => {
+      if (!virtualListMounted || virtualSamples.length === 0) {
+        return;
+      }
+
+      invalidateVirtualWindow();
+      scheduleVirtualRowsRender(true);
+    });
+
+    resizeObserver.observe(resultsBodyElement);
+  }
+
+  resultsBodyElement.addEventListener("click", (event) => {
     const target = event.target as HTMLElement;
     const button = target.closest<HTMLButtonElement>("button[data-action]");
 
@@ -702,27 +896,30 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
       syncPlayheadAnimation();
       renderSlotMatrix(state);
 
-      resultsBody.replaceChildren();
-
       if (state.filteredSamples.length === 0) {
+        clearVirtualRenderFrame();
+        invalidateVirtualWindow();
+        virtualSamples = [];
+        virtualSelectedSampleId = null;
+        virtualCurrentAudioId = null;
+        virtualTopSpacer.style.height = "0px";
+        virtualBottomSpacer.style.height = "0px";
+        virtualRows.replaceChildren();
+        virtualListMounted = false;
         const emptyState = document.createElement("div");
         emptyState.className = "empty-state";
         emptyState.textContent = state.currentDirectoryId
           ? "Keine passenden Samples gefunden."
           : "Waehle einen lokalen Sample-Ordner, um den ersten Scan zu starten.";
-        resultsBody.append(emptyState);
+        resultsBodyElement.replaceChildren(emptyState);
         return;
       }
 
-      const fragment = document.createDocumentFragment();
-
-      for (const sample of state.filteredSamples) {
-        fragment.append(
-          createRow(sample, state.currentAudioId, state.selectedSampleId),
-        );
-      }
-
-      resultsBody.append(fragment);
+      virtualSamples = state.filteredSamples;
+      virtualSelectedSampleId = state.selectedSampleId;
+      virtualCurrentAudioId = state.currentAudioId;
+      ensureVirtualListMounted();
+      scheduleVirtualRowsRender(true);
     },
   };
 }

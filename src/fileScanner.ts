@@ -15,6 +15,24 @@ const CATEGORY_RULES: Array<{
 ];
 
 const AUDIO_EXTENSIONS = new Set(["wav", "aif", "aiff", "mp3", "flac"]);
+const MACOS_METADATA_DIRECTORIES = new Set(["__macosx"]);
+
+function shouldSkipEntry(
+  entryName: string,
+  entryKind: FileSystemHandleKind,
+): boolean {
+  const normalizedName = entryName.toLowerCase();
+
+  if (normalizedName.startsWith("._")) {
+    return true;
+  }
+
+  if (entryKind === "directory" && MACOS_METADATA_DIRECTORIES.has(normalizedName)) {
+    return true;
+  }
+
+  return false;
+}
 
 function normalizeText(value: string): string {
   return value
@@ -72,6 +90,10 @@ export async function scanDirectory(
     currentPath: string[],
   ): Promise<void> {
     for await (const [entryName, entry] of currentHandle.entries()) {
+      if (shouldSkipEntry(entryName, entry.kind)) {
+        continue;
+      }
+
       if (entry.kind === "directory") {
         await walk(entry, [...currentPath, entryName]);
         continue;
