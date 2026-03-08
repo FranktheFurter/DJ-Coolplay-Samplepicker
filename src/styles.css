@@ -1,30 +1,30 @@
 @import url("https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=VT323&display=swap");
 
 :root {
-  color-scheme: light;
+  color-scheme: dark;
   font-family: "Chakra Petch", "Segoe UI", sans-serif;
   line-height: 1.4;
   font-weight: 400;
   --font-ui: "Chakra Petch", "Segoe UI", sans-serif;
   --font-tracker: "VT323", "Courier New", monospace;
-  --bg: #e4d9dd;
-  --bg-accent: #d6c7cd;
-  --panel: rgba(252, 245, 248, 0.96);
-  --panel-strong: #fff8fb;
-  --border: #8b7077;
-  --text: #26161b;
-  --muted: #70545d;
-  --accent: #6e102f;
-  --accent-soft: #f6dbe5;
-  --accent-strong: #48091f;
-  --fuzzy-hit: #5a001d;
-  --fuzzy-hit-bg: rgba(110, 16, 47, 0.3);
-  --accent-contrast: #2f9a83;
-  --accent-contrast-soft: #ddf8f0;
-  --danger: #7f0f31;
+  --bg: #111018;
+  --bg-accent: #1a1724;
+  --panel: rgba(20, 17, 30, 0.98);
+  --panel-strong: #1e1b2c;
+  --border: #3e3356;
+  --text: #e4daf5;
+  --muted: #8c7daa;
+  --accent: #c94470;
+  --accent-soft: rgba(201, 68, 112, 0.22);
+  --accent-strong: #f06290;
+  --fuzzy-hit: #ff96c4;
+  --fuzzy-hit-bg: rgba(201, 68, 112, 0.32);
+  --accent-contrast: #2ab89a;
+  --accent-contrast-soft: rgba(42, 184, 154, 0.18);
+  --danger: #e05060;
   --shadow:
-    0 2px 0 rgba(75, 23, 40, 0.34),
-    0 18px 36px rgba(83, 45, 58, 0.2);
+    0 2px 0 rgba(0, 0, 0, 0.7),
+    0 18px 36px rgba(0, 0, 0, 0.6);
   --results-row-height: 72px;
 }
 
@@ -40,8 +40,8 @@ body {
   background:
     repeating-linear-gradient(
       180deg,
-      rgba(255, 255, 255, 0.12) 0 2px,
-      rgba(0, 0, 0, 0.04) 2px 4px
+      rgba(255, 255, 255, 0.025) 0 2px,
+      rgba(0, 0, 0, 0.18) 2px 4px
     ),
     linear-gradient(180deg, var(--bg-accent) 0%, var(--bg) 100%);
   color: var(--text);
@@ -69,7 +69,7 @@ button {
   background: var(--panel-strong);
   color: var(--text);
   cursor: pointer;
-  box-shadow: 2px 2px 0 rgba(73, 44, 53, 0.24);
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.4);
   transition:
     transform 120ms ease,
     border-color 120ms ease,
@@ -85,7 +85,7 @@ button:hover:enabled {
 button:active:enabled,
 button.is-pressed:enabled {
   transform: translate(1px, 1px);
-  box-shadow: 1px 1px 0 rgba(73, 44, 53, 0.28);
+  box-shadow: 1px 1px 0 rgba(0, 0, 0, 0.4);
 }
 
 button:disabled {
@@ -98,7 +98,7 @@ input[type="search"] {
   border: 2px solid var(--border);
   border-radius: 6px;
   padding: 0.75rem 0.9rem;
-  background: #fffdf2;
+  background: #1c1828;
   color: var(--text);
 }
 
@@ -107,7 +107,7 @@ input[type="search"] {
   height: 100dvh;
   margin: 0 auto;
   padding: 24px;
-  border: 2px solid rgba(109, 69, 83, 0.5);
+  border: 2px solid rgba(80, 62, 110, 0.5);
   border-radius: 14px;
   background: var(--panel);
   box-shadow: var(--shadow);
@@ -138,7 +138,7 @@ input[type="search"] {
   line-height: 0.9;
   letter-spacing: 0.04em;
   color: var(--accent-strong);
-  text-shadow: 1px 1px 0 rgba(255, 255, 255, 0.65);
+  text-shadow: 0 0 18px rgba(240, 98, 144, 0.45), 1px 1px 0 rgba(0, 0, 0, 0.7);
 }
 
 .headline-export-button {
@@ -156,8 +156,8 @@ input[type="search"] {
   background:
     linear-gradient(
       180deg,
-      rgba(249, 226, 233, 0.76) 0%,
-      rgba(244, 252, 248, 0.82) 100%
+      rgba(36, 28, 54, 0.82) 0%,
+      rgba(24, 32, 48, 0.88) 100%
     );
 }
 
@@ -171,7 +171,7 @@ input[type="search"] {
 .randomizer-controls {
   margin-top: 12px;
   padding-top: 12px;
-  border-top: 2px solid rgba(139, 112, 119, 0.32);
+  border-top: 2px solid rgba(62, 51, 86, 0.5);
   display: flex;
   gap: 12px;
   align-items: center;
@@ -205,7 +205,7 @@ input[type="search"] {
   border: 2px solid var(--border);
   border-radius: 6px;
   padding: 0.28rem 0.35rem;
-  background: #fffdf8;
+  background: #1c1828;
   color: var(--text);
   font-family: var(--font-tracker);
   font-size: 1.2rem;
@@ -244,8 +244,8 @@ input[type="search"] {
 
 .primary-button {
   background: var(--accent);
-  color: #f8fff9;
-  border-color: var(--accent-strong);
+  color: #f8eef4;
+  border-color: rgba(240, 98, 144, 0.7);
 }
 
 .primary-button:hover:enabled {
@@ -260,14 +260,14 @@ input[type="search"] {
 }
 
 .write-button {
-  background: var(--accent-contrast-soft);
-  border-color: rgba(47, 154, 131, 0.64);
-  color: #0f4a3e;
+  background: rgba(42, 184, 154, 0.15);
+  border-color: rgba(42, 184, 154, 0.55);
+  color: #5ee8c8;
 }
 
 .write-button:hover:enabled {
   border-color: var(--accent-contrast);
-  background: #cef3ea;
+  background: rgba(42, 184, 154, 0.25);
 }
 
 .filter-toggle {
@@ -294,10 +294,10 @@ input[type="search"] {
 
 .error-box {
   margin-bottom: 16px;
-  border: 1px solid rgba(163, 41, 41, 0.25);
+  border: 1px solid rgba(224, 80, 96, 0.35);
   border-radius: 14px;
   padding: 12px 14px;
-  background: rgba(163, 41, 41, 0.08);
+  background: rgba(224, 80, 96, 0.1);
   color: var(--danger);
 }
 
@@ -308,13 +308,13 @@ input[type="search"] {
   padding: 12px 14px;
   background: linear-gradient(
     180deg,
-    rgba(252, 235, 241, 0.84) 0%,
-    rgba(246, 252, 248, 0.94) 100%
+    rgba(28, 18, 40, 0.9) 0%,
+    rgba(18, 26, 38, 0.95) 100%
   );
 }
 
 .waveform-panel.is-active {
-  border-color: rgba(110, 16, 47, 0.45);
+  border-color: rgba(201, 68, 112, 0.6);
 }
 
 .waveform-meta {
@@ -351,14 +351,14 @@ input[type="search"] {
   height: 104px;
   margin-top: 10px;
   border-radius: 6px;
-  border: 2px solid rgba(139, 112, 119, 0.64);
+  border: 2px solid rgba(62, 51, 86, 0.8);
   background:
     repeating-linear-gradient(
       180deg,
-      rgba(255, 255, 255, 0.18) 0 2px,
-      rgba(38, 22, 27, 0.04) 2px 4px
+      rgba(255, 255, 255, 0.04) 0 2px,
+      rgba(0, 0, 0, 0.3) 2px 4px
     ),
-    rgba(255, 255, 255, 0.48);
+    rgba(8, 6, 16, 0.85);
   overflow: hidden;
 }
 
@@ -388,7 +388,7 @@ input[type="search"] {
 .results {
   border: 2px solid var(--border);
   border-radius: 8px;
-  background: rgba(255, 253, 247, 0.92);
+  background: rgba(16, 13, 24, 0.95);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -403,7 +403,7 @@ input[type="search"] {
   gap: 12px;
   padding: 10px 14px;
   border-bottom: 2px solid var(--border);
-  background: rgba(255, 241, 237, 0.78);
+  background: rgba(24, 20, 38, 0.9);
 }
 
 .results-toolbar-main-actions {
@@ -419,12 +419,12 @@ input[type="search"] {
   align-items: center;
   gap: 0.45rem;
   padding: 0.58rem 0.78rem;
-  border: 2px solid rgba(110, 16, 47, 0.5);
+  border: 2px solid rgba(201, 68, 112, 0.4);
   border-radius: 6px;
   background: linear-gradient(
     180deg,
-    rgba(250, 226, 236, 0.86) 0%,
-    rgba(247, 243, 247, 0.92) 100%
+    rgba(42, 30, 58, 0.9) 0%,
+    rgba(30, 26, 48, 0.94) 100%
   );
   color: var(--accent-strong);
   font-family: var(--font-tracker);
@@ -447,11 +447,11 @@ input[type="search"] {
 }
 
 .toolbar-main-button.is-play-main {
-  border-color: rgba(110, 16, 47, 0.72);
+  border-color: rgba(201, 68, 112, 0.72);
   background: linear-gradient(
     180deg,
-    rgba(243, 200, 219, 0.9) 0%,
-    rgba(245, 227, 237, 0.96) 100%
+    rgba(56, 24, 44, 0.92) 0%,
+    rgba(40, 22, 38, 0.96) 100%
   );
 }
 
@@ -459,19 +459,19 @@ input[type="search"] {
   border-color: var(--accent);
   background: linear-gradient(
     180deg,
-    rgba(247, 208, 224, 0.9) 0%,
-    rgba(245, 235, 241, 0.95) 100%
+    rgba(56, 30, 56, 0.9) 0%,
+    rgba(38, 28, 52, 0.95) 100%
   );
 }
 
 .toolbar-main-button.is-write {
-  border-color: rgba(47, 154, 131, 0.6);
+  border-color: rgba(42, 184, 154, 0.55);
   background: linear-gradient(
     180deg,
-    rgba(222, 250, 242, 0.92) 0%,
-    rgba(240, 252, 248, 0.96) 100%
+    rgba(22, 46, 40, 0.92) 0%,
+    rgba(18, 36, 34, 0.96) 100%
   );
-  color: #0f4f43;
+  color: #5ee8c8;
 }
 
 .toolbar-main-button-icon {
@@ -502,9 +502,9 @@ input[type="search"] {
   gap: 7px;
   min-height: 34px;
   padding: 0.44rem 0.55rem;
-  border: 2px solid rgba(110, 16, 47, 0.34);
+  border: 2px solid rgba(201, 68, 112, 0.28);
   border-radius: 6px;
-  background: rgba(255, 252, 254, 0.86);
+  background: rgba(28, 22, 42, 0.88);
   color: var(--muted);
   font-family: var(--font-tracker);
   font-size: 1.2rem;
@@ -521,9 +521,9 @@ input[type="search"] {
 .danger-button {
   margin-left: auto;
   padding: 0.6rem 0.85rem;
-  border: 2px solid rgba(143, 47, 33, 0.58);
+  border: 2px solid rgba(224, 80, 96, 0.5);
   border-radius: 6px;
-  background: rgba(163, 41, 41, 0.08);
+  background: rgba(224, 80, 96, 0.1);
   color: var(--danger);
   font-family: var(--font-tracker);
   font-size: 1.45rem;
@@ -533,7 +533,7 @@ input[type="search"] {
 
 .danger-button:hover:enabled {
   border-color: var(--danger);
-  background: rgba(163, 41, 41, 0.16);
+  background: rgba(224, 80, 96, 0.2);
 }
 
 .results-header,
@@ -573,7 +573,7 @@ input[type="search"] {
 .sample-row {
   height: var(--results-row-height);
   padding: 14px 18px;
-  border-bottom: 1px solid rgba(114, 132, 113, 0.34);
+  border-bottom: 1px solid rgba(62, 51, 86, 0.6);
   cursor: pointer;
   transition: background 120ms ease;
 }
@@ -583,11 +583,11 @@ input[type="search"] {
 }
 
 .sample-row:hover {
-  background: rgba(110, 16, 47, 0.05);
+  background: rgba(201, 68, 112, 0.1);
 }
 
 .sample-row.is-selected {
-  background: rgba(110, 16, 47, 0.11);
+  background: rgba(201, 68, 112, 0.2);
 }
 
 .sample-name {
@@ -619,8 +619,8 @@ input[type="search"] {
   width: fit-content;
   padding: 0.35rem 0.6rem;
   border-radius: 6px;
-  border: 1px solid rgba(139, 112, 119, 0.72);
-  background: rgba(110, 16, 47, 0.08);
+  border: 1px solid rgba(201, 68, 112, 0.45);
+  background: rgba(201, 68, 112, 0.15);
   color: var(--accent-strong);
   text-transform: capitalize;
   font-size: 0.92rem;
@@ -646,7 +646,7 @@ input[type="search"] {
   text-align: center;
   white-space: nowrap;
   line-height: 1;
-  background: #fffdf8;
+  background: #1c1828;
   color: var(--muted);
   font-weight: 600;
   font-family: var(--font-tracker);
@@ -658,7 +658,7 @@ input[type="search"] {
 .slot-panel {
   border: 2px solid var(--border);
   border-radius: 8px;
-  background: rgba(255, 253, 247, 0.92);
+  background: rgba(16, 13, 24, 0.96);
   height: 100%;
   min-height: 0;
   overflow: hidden;
@@ -675,12 +675,12 @@ input[type="search"] {
 
 .slot-counter-rail {
   min-height: 0;
-  border: 2px solid rgba(47, 154, 131, 0.5);
+  border: 2px solid rgba(42, 184, 154, 0.45);
   border-radius: 6px;
   background: linear-gradient(
     180deg,
-    rgba(110, 16, 47, 0.12),
-    rgba(47, 154, 131, 0.1)
+    rgba(201, 68, 112, 0.14),
+    rgba(42, 184, 154, 0.12)
   );
   position: relative;
   overflow: hidden;
@@ -701,8 +701,8 @@ input[type="search"] {
   line-height: 1;
   font-weight: 700;
   text-align: center;
-  background: var(--accent-contrast-soft);
-  color: #0f463b;
+  background: rgba(42, 184, 154, 0.18);
+  color: #5ee8c8;
   transition: top 160ms ease;
   appearance: textfield;
   -moz-appearance: textfield;
@@ -730,13 +730,13 @@ input[type="search"] {
 .slot-category {
   flex: 1 1 0;
   min-height: 0;
-  border: 2px solid rgba(139, 112, 119, 0.56);
+  border: 2px solid rgba(62, 51, 86, 0.72);
   border-radius: 6px;
   background:
     linear-gradient(
       180deg,
-      rgba(252, 238, 243, 0.74) 0%,
-      rgba(244, 252, 248, 0.86) 100%
+      rgba(32, 22, 46, 0.82) 0%,
+      rgba(22, 30, 44, 0.9) 100%
     );
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -767,11 +767,11 @@ input[type="search"] {
 .slot-category-input {
   width: 100%;
   min-width: 0;
-  border: 2px solid rgba(110, 16, 47, 0.42);
+  border: 2px solid rgba(201, 68, 112, 0.38);
   border-radius: 6px;
   padding: 0.25rem 0.35rem;
-  background: rgba(245, 211, 224, 0.54);
-  color: #501426;
+  background: rgba(40, 20, 42, 0.72);
+  color: var(--accent-strong);
   font-family: var(--font-tracker);
   font-size: 1.38rem;
   letter-spacing: 0.01em;
@@ -792,12 +792,12 @@ input[type="search"] {
   min-width: 0;
   min-height: 0;
   border-radius: 1px;
-  background: rgba(110, 16, 47, 0.18);
-  box-shadow: inset 0 0 0 1px rgba(110, 16, 47, 0.16);
+  background: rgba(201, 68, 112, 0.14);
+  box-shadow: inset 0 0 0 1px rgba(201, 68, 112, 0.12);
 }
 
 .slot-pixel.is-assigned {
-  background: rgba(110, 16, 47, 0.9);
+  background: rgba(201, 68, 112, 0.88);
   box-shadow: none;
 }
 
@@ -821,10 +821,10 @@ input[type="search"] {
 }
 
 .slot-pixel.is-assigned.is-counter {
-  background: rgba(110, 16, 47, 0.92);
+  background: rgba(201, 68, 112, 0.92);
   box-shadow:
     inset 0 0 0 2px var(--accent-contrast),
-    0 0 0 1px rgba(47, 154, 131, 0.42);
+    0 0 0 1px rgba(42, 184, 154, 0.42);
 }
 
 .slot-pixel.is-selected.is-counter {
@@ -844,7 +844,7 @@ input[type="search"] {
 }
 
 .slot-pixel.is-empty {
-  background: rgba(0, 0, 0, 0.08);
+  background: rgba(0, 0, 0, 0.3);
 }
 
 .empty-state {
