@@ -259,12 +259,30 @@ function handleStarredOnlyChange(showStarredOnly: boolean): void {
   commitState({ showStarredOnly });
 }
 
+function handleLoopEnabledChange(loopEnabled: boolean): void {
+  audioPreview.setLoopEnabled(loopEnabled);
+  commitState({ loopEnabled });
+}
+
 function handleSelectSample(sampleId: string): void {
-  if (store.getState().selectedSampleId === sampleId) {
+  const state = store.getState();
+
+  if (state.selectedSampleId === sampleId) {
     return;
   }
 
+  if (state.currentAudioId && state.currentAudioId !== sampleId) {
+    audioPreview.stop();
+  }
+
   commitState({ selectedSampleId: sampleId });
+}
+
+function handlePlaybackProgress(
+  sampleId: string,
+  fallbackDurationSeconds: number,
+): number | null {
+  return audioPreview.getPlayheadProgress(sampleId, fallbackDurationSeconds);
 }
 
 async function handleToggleStar(sampleId: string): Promise<void> {
@@ -344,6 +362,8 @@ const ui = createUI(appRoot, {
   onRefreshScan: handleRefreshScan,
   onSearchChange: handleSearchChange,
   onStarredOnlyChange: handleStarredOnlyChange,
+  onLoopEnabledChange: handleLoopEnabledChange,
+  getPlaybackProgress: handlePlaybackProgress,
   onSelectSample: handleSelectSample,
   onToggleStar: handleToggleStar,
   onTogglePlay: handleTogglePlay,

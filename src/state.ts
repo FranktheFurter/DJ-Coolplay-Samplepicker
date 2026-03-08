@@ -6,6 +6,7 @@ export const initialAppState: AppState = {
   samples: [],
   filteredSamples: [],
   selectedSampleId: null,
+  loopEnabled: false,
   query: "",
   showStarredOnly: false,
   currentDirectoryId: null,

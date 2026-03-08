@@ -5,6 +5,11 @@ interface UIHandlers {
   onRefreshScan: () => void | Promise<void>;
   onSearchChange: (query: string) => void;
   onStarredOnlyChange: (showStarredOnly: boolean) => void;
+  onLoopEnabledChange: (loopEnabled: boolean) => void;
+  getPlaybackProgress: (
+    sampleId: string,
+    fallbackDurationSeconds: number,
+  ) => number | null;
   onSelectSample: (sampleId: string) => void;
   onToggleStar: (sampleId: string) => void | Promise<void>;
   onTogglePlay: (sampleId: string) => void | Promise<void>;
@@ -98,6 +103,45 @@ function drawWaveform(
     const y = centerY - barHeight / 2;
     context.fillRect(x, y, barWidth, barHeight);
   }
+
+}
+
+function drawPlayhead(
+  canvas: HTMLCanvasElement,
+  playheadProgress: number | null,
+): void {
+  const width = Math.max(1, Math.floor(canvas.clientWidth));
+  const height = Math.max(1, Math.floor(canvas.clientHeight));
+  const devicePixelRatio = window.devicePixelRatio || 1;
+  const renderWidth = Math.max(1, Math.floor(width * devicePixelRatio));
+  const renderHeight = Math.max(1, Math.floor(height * devicePixelRatio));
+
+  if (canvas.width !== renderWidth || canvas.height !== renderHeight) {
+    canvas.width = renderWidth;
+    canvas.height = renderHeight;
+  }
+
+  const context = canvas.getContext("2d");
+
+  if (!context) {
+    return;
+  }
+
+  context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+  context.clearRect(0, 0, width, height);
+
+  if (playheadProgress === null) {
+    return;
+  }
+
+  const clamped = Math.max(0, Math.min(1, playheadProgress));
+  const x = Math.round(clamped * (width - 1)) + 0.5;
+  context.strokeStyle = "rgba(22, 101, 52, 0.95)";
+  context.lineWidth = 2;
+  context.beginPath();
+  context.moveTo(x, 2);
+  context.lineTo(x, height - 2);
+  context.stroke();
 }
 
 function createRow(
@@ -196,9 +240,24 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
       <section class="waveform-panel" data-role="waveform-panel">
         <div class="waveform-meta">
           <strong data-role="waveform-title">Kein Sample aktiv</strong>
-          <span data-role="waveform-duration">Eintrag waehlen, um Waveform zu sehen</span>
+          <div class="waveform-controls">
+            <label class="loop-toggle">
+              <input type="checkbox" data-role="loop-toggle" />
+              Loop
+            </label>
+            <span data-role="waveform-duration">Eintrag waehlen, um Waveform zu sehen</span>
+          </div>
         </div>
-        <canvas class="waveform-canvas" data-role="waveform-canvas"></canvas>
+        <div class="waveform-canvas-wrap">
+          <canvas
+            class="waveform-canvas waveform-canvas-base"
+            data-role="waveform-canvas-base"
+          ></canvas>
+          <canvas
+            class="waveform-canvas waveform-canvas-playhead"
+            data-role="waveform-canvas-playhead"
+          ></canvas>
+        </div>
       </section>
 
       <section class="results">
@@ -235,8 +294,14 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
   const waveformDuration = root.querySelector<HTMLElement>(
     '[data-role="waveform-duration"]',
   );
-  const waveformCanvas = root.querySelector<HTMLCanvasElement>(
-    '[data-role="waveform-canvas"]',
+  const loopToggleInput = root.querySelector<HTMLInputElement>(
+    '[data-role="loop-toggle"]',
+  );
+  const waveformBaseCanvas = root.querySelector<HTMLCanvasElement>(
+    '[data-role="waveform-canvas-base"]',
+  );
+  const waveformPlayheadCanvas = root.querySelector<HTMLCanvasElement>(
+    '[data-role="waveform-canvas-playhead"]',
   );
   const resultsBody = root.querySelector<HTMLDivElement>(
     '[data-role="results-body"]',
@@ -253,17 +318,72 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
     !waveformPanel ||
     !waveformTitle ||
     !waveformDuration ||
-    !waveformCanvas ||
+    !loopToggleInput ||
+    !waveformBaseCanvas ||
+    !waveformPlayheadCanvas ||
     !resultsBody
   ) {
     throw new Error("UI konnte nicht initialisiert werden.");
   }
 
+  const waveformBaseCanvasElement = waveformBaseCanvas;
+  const waveformPlayheadCanvasElement = waveformPlayheadCanvas;
   let latestWaveform: WaveformPreview | null = null;
+  let latestSelectedSampleId: string | null = null;
+  let latestCurrentAudioId: string | null = null;
+  let playheadFrameId: number | null = null;
 
-  window.addEventListener("resize", () => {
-    drawWaveform(waveformCanvas, latestWaveform);
-  });
+  function getPlayheadProgress(): number | null {
+    if (
+      !latestSelectedSampleId ||
+      latestCurrentAudioId !== latestSelectedSampleId
+    ) {
+      return null;
+    }
+
+    return handlers.getPlaybackProgress(
+      latestSelectedSampleId,
+      latestWaveform?.durationSeconds ?? 0,
+    );
+  }
+
+  function hasActivePlayheadTrack(): boolean {
+    return (
+      latestSelectedSampleId !== null &&
+      latestCurrentAudioId === latestSelectedSampleId
+    );
+  }
+
+  function stopPlayheadAnimation(): void {
+    if (playheadFrameId !== null) {
+      window.cancelAnimationFrame(playheadFrameId);
+      playheadFrameId = null;
+    }
+  }
+
+  function renderPlayheadFrame(): void {
+    const progress = getPlayheadProgress();
+    drawPlayhead(waveformPlayheadCanvasElement, progress);
+
+    if (!hasActivePlayheadTrack()) {
+      playheadFrameId = null;
+      return;
+    }
+
+    playheadFrameId = window.requestAnimationFrame(renderPlayheadFrame);
+  }
+
+  function syncPlayheadAnimation(): void {
+    if (!hasActivePlayheadTrack()) {
+      stopPlayheadAnimation();
+      drawPlayhead(waveformPlayheadCanvasElement, null);
+      return;
+    }
+
+    if (playheadFrameId === null) {
+      renderPlayheadFrame();
+    }
+  }
 
   pickDirectoryButton.addEventListener("click", () => {
     void handlers.onPickDirectory();
@@ -281,6 +401,11 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
   starredOnlyInput.addEventListener("change", (event) => {
     const target = event.currentTarget as HTMLInputElement;
     handlers.onStarredOnlyChange(target.checked);
+  });
+
+  loopToggleInput.addEventListener("change", (event) => {
+    const target = event.currentTarget as HTMLInputElement;
+    handlers.onLoopEnabledChange(target.checked);
   });
 
   resultsBody.addEventListener("click", (event) => {
@@ -324,6 +449,7 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
         state.isScanning || state.currentDirectoryId === null;
       searchInput.value = state.query;
       starredOnlyInput.checked = state.showStarredOnly;
+      loopToggleInput.checked = state.loopEnabled;
 
       statusElement.textContent = formatStatus(state);
       countElement.textContent = formatCount(state.filteredSamples.length);
@@ -349,8 +475,11 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
         waveformDuration.textContent = "Eintrag waehlen, um Waveform zu sehen";
       }
 
+      latestSelectedSampleId = state.selectedSampleId;
+      latestCurrentAudioId = state.currentAudioId;
       latestWaveform = state.currentWaveform;
-      drawWaveform(waveformCanvas, latestWaveform);
+      drawWaveform(waveformBaseCanvasElement, latestWaveform);
+      syncPlayheadAnimation();
 
       resultsBody.replaceChildren();
 

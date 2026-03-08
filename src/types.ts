@@ -40,6 +40,7 @@ export interface AppState {
   samples: SampleRecord[];
   filteredSamples: SampleRecord[];
   selectedSampleId: string | null;
+  loopEnabled: boolean;
   query: string;
   showStarredOnly: boolean;
   currentDirectoryId: string | null;
