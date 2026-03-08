@@ -17,27 +17,37 @@ import { createAppStore, initialAppState } from "./state";
 import "./styles.css";
 import type { AppState, PersistedDirectory, SampleRecord } from "./types";
 import { createUI } from "./ui";
+import { createWaveformPreview } from "./waveform";
 
 const store = createAppStore(initialAppState);
-const audioPreview = new AudioPreviewController(
-  (sampleId) => {
-    commitState({ currentAudioId: sampleId });
-  },
-  (waveform) => {
-    commitState({ currentWaveform: waveform });
-  },
-);
+const audioPreview = new AudioPreviewController((sampleId) => {
+  commitState({ currentAudioId: sampleId });
+});
 
 let activeDirectory: PersistedDirectory | null = null;
+let waveformRequestToken = 0;
+let lastSelectedSampleId: string | null = null;
 
 function deriveState(nextState: AppState): AppState {
+  const filteredSamples = filterSamples(
+    nextState.samples,
+    nextState.query,
+    nextState.showStarredOnly,
+  );
+  let selectedSampleId = nextState.selectedSampleId;
+
+  if (filteredSamples.length === 0) {
+    selectedSampleId = null;
+  } else if (!selectedSampleId) {
+    selectedSampleId = filteredSamples[0].id;
+  } else if (!filteredSamples.some((sample) => sample.id === selectedSampleId)) {
+    selectedSampleId = filteredSamples[0].id;
+  }
+
   return {
     ...nextState,
-    filteredSamples: filterSamples(
-      nextState.samples,
-      nextState.query,
-      nextState.showStarredOnly,
-    ),
+    filteredSamples,
+    selectedSampleId,
   };
 }
 
@@ -67,6 +77,63 @@ function buildStarMap(samples: SampleRecord[]): Map<string, boolean> {
   return new Map(
     samples.map((sample) => [sample.relativePath.toLowerCase(), sample.starred]),
   );
+}
+
+async function loadWaveformForSelection(sampleId: string | null): Promise<void> {
+  const token = ++waveformRequestToken;
+
+  if (!sampleId || !activeDirectory) {
+    commitState({ currentWaveform: null });
+    return;
+  }
+
+  const sample = store.getState().samples.find((entry) => entry.id === sampleId);
+
+  if (!sample) {
+    commitState({ currentWaveform: null });
+    return;
+  }
+
+  commitState({
+    currentWaveform: {
+      sampleId: sample.id,
+      sampleName: sample.name,
+      durationSeconds: 0,
+      peaks: [],
+    },
+  });
+
+  try {
+    const hasPermission = await ensureReadPermission(activeDirectory.handle);
+
+    if (!hasPermission) {
+      throw new Error("Leseberechtigung fuer Waveform wurde verweigert.");
+    }
+
+    const file = await getFileFromRelativePath(
+      activeDirectory.handle,
+      sample.relativePath,
+    );
+    const waveform = await createWaveformPreview(sample.id, sample.name, file);
+
+    if (token !== waveformRequestToken) {
+      return;
+    }
+
+    commitState({ currentWaveform: waveform });
+  } catch (error) {
+    if (token !== waveformRequestToken) {
+      return;
+    }
+
+    commitState({
+      currentWaveform: null,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Waveform konnte nicht geladen werden.",
+    });
+  }
 }
 
 async function runScan(directory: PersistedDirectory): Promise<void> {
@@ -192,6 +259,14 @@ function handleStarredOnlyChange(showStarredOnly: boolean): void {
   commitState({ showStarredOnly });
 }
 
+function handleSelectSample(sampleId: string): void {
+  if (store.getState().selectedSampleId === sampleId) {
+    return;
+  }
+
+  commitState({ selectedSampleId: sampleId });
+}
+
 async function handleToggleStar(sampleId: string): Promise<void> {
   const previousSamples = store.getState().samples;
   const sample = previousSamples.find((entry) => entry.id === sampleId);
@@ -231,6 +306,8 @@ async function handleTogglePlay(sampleId: string): Promise<void> {
     return;
   }
 
+  handleSelectSample(sample.id);
+
   try {
     const hasPermission = await ensureReadPermission(activeDirectory.handle);
 
@@ -241,7 +318,6 @@ async function handleTogglePlay(sampleId: string): Promise<void> {
     await audioPreview.toggle(
       {
         id: sample.id,
-        name: sample.name,
       },
       async () =>
         getFileFromRelativePath(activeDirectory!.handle, sample.relativePath),
@@ -249,7 +325,6 @@ async function handleTogglePlay(sampleId: string): Promise<void> {
   } catch (error) {
     commitState({
       currentAudioId: null,
-      currentWaveform: null,
       error:
         error instanceof Error
           ? error.message
@@ -269,12 +344,18 @@ const ui = createUI(appRoot, {
   onRefreshScan: handleRefreshScan,
   onSearchChange: handleSearchChange,
   onStarredOnlyChange: handleStarredOnlyChange,
+  onSelectSample: handleSelectSample,
   onToggleStar: handleToggleStar,
   onTogglePlay: handleTogglePlay,
 });
 
 store.subscribe((state) => {
   ui.render(state);
+
+  if (state.selectedSampleId !== lastSelectedSampleId) {
+    lastSelectedSampleId = state.selectedSampleId;
+    void loadWaveformForSelection(state.selectedSampleId);
+  }
 });
 
 commitState({

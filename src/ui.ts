@@ -5,6 +5,7 @@ interface UIHandlers {
   onRefreshScan: () => void | Promise<void>;
   onSearchChange: (query: string) => void;
   onStarredOnlyChange: (showStarredOnly: boolean) => void;
+  onSelectSample: (sampleId: string) => void;
   onToggleStar: (sampleId: string) => void | Promise<void>;
   onTogglePlay: (sampleId: string) => void | Promise<void>;
 }
@@ -102,9 +103,12 @@ function drawWaveform(
 function createRow(
   sample: SampleRecord,
   currentAudioId: string | null,
+  selectedSampleId: string | null,
 ): HTMLDivElement {
   const row = document.createElement("div");
-  row.className = "sample-row";
+  row.className =
+    sample.id === selectedSampleId ? "sample-row is-selected" : "sample-row";
+  row.dataset.id = sample.id;
 
   const name = document.createElement("div");
   name.className = "sample-name";
@@ -192,7 +196,7 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
       <section class="waveform-panel" data-role="waveform-panel">
         <div class="waveform-meta">
           <strong data-role="waveform-title">Kein Sample aktiv</strong>
-          <span data-role="waveform-duration">Play klicken, um Waveform zu sehen</span>
+          <span data-role="waveform-duration">Eintrag waehlen, um Waveform zu sehen</span>
         </div>
         <canvas class="waveform-canvas" data-role="waveform-canvas"></canvas>
       </section>
@@ -283,26 +287,34 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
     const target = event.target as HTMLElement;
     const button = target.closest<HTMLButtonElement>("button[data-action]");
 
-    if (!button) {
+    if (button) {
+      const sampleId = button.dataset.id;
+
+      if (!sampleId) {
+        return;
+      }
+
+      const action = button.dataset.action;
+
+      if (action === "play") {
+        void handlers.onTogglePlay(sampleId);
+        return;
+      }
+
+      if (action === "star") {
+        void handlers.onToggleStar(sampleId);
+      }
+
       return;
     }
 
-    const sampleId = button.dataset.id;
+    const row = target.closest<HTMLDivElement>(".sample-row");
 
-    if (!sampleId) {
+    if (!row?.dataset.id) {
       return;
     }
 
-    const action = button.dataset.action;
-
-    if (action === "play") {
-      void handlers.onTogglePlay(sampleId);
-      return;
-    }
-
-    if (action === "star") {
-      void handlers.onToggleStar(sampleId);
-    }
+    handlers.onSelectSample(row.dataset.id);
   });
 
   return {
@@ -327,13 +339,14 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
       if (state.currentWaveform) {
         waveformPanel.classList.add("is-active");
         waveformTitle.textContent = state.currentWaveform.sampleName;
-        waveformDuration.textContent = formatDuration(
-          state.currentWaveform.durationSeconds,
-        );
+        waveformDuration.textContent =
+          state.currentWaveform.peaks.length > 0
+            ? formatDuration(state.currentWaveform.durationSeconds)
+            : "Waveform wird geladen...";
       } else {
         waveformPanel.classList.remove("is-active");
         waveformTitle.textContent = "Kein Sample aktiv";
-        waveformDuration.textContent = "Play klicken, um Waveform zu sehen";
+        waveformDuration.textContent = "Eintrag waehlen, um Waveform zu sehen";
       }
 
       latestWaveform = state.currentWaveform;
@@ -354,7 +367,9 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
       const fragment = document.createDocumentFragment();
 
       for (const sample of state.filteredSamples) {
-        fragment.append(createRow(sample, state.currentAudioId));
+        fragment.append(
+          createRow(sample, state.currentAudioId, state.selectedSampleId),
+        );
       }
 
       resultsBody.append(fragment);

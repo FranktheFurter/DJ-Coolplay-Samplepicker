@@ -239,6 +239,16 @@ input[type="search"] {
 .sample-row {
   padding: 14px 18px;
   border-bottom: 1px solid rgba(200, 190, 175, 0.55);
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+
+.sample-row:hover {
+  background: rgba(22, 101, 52, 0.04);
+}
+
+.sample-row.is-selected {
+  background: rgba(22, 101, 52, 0.1);
 }
 
 .sample-row:last-child {

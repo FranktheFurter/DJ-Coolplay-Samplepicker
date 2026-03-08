@@ -39,6 +39,7 @@ export interface WaveformPreview {
 export interface AppState {
   samples: SampleRecord[];
   filteredSamples: SampleRecord[];
+  selectedSampleId: string | null;
   query: string;
   showStarredOnly: boolean;
   currentDirectoryId: string | null;

@@ -5,6 +5,7 @@ type Listener = (state: AppState) => void;
 export const initialAppState: AppState = {
   samples: [],
   filteredSamples: [],
+  selectedSampleId: null,
   query: "",
   showStarredOnly: false,
   currentDirectoryId: null,
