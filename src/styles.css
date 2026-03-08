@@ -117,6 +117,13 @@ input[type="search"] {
   margin-bottom: 24px;
 }
 
+.headline {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .headline h1 {
   margin: 0;
   font-family: var(--font-tracker);
@@ -125,6 +132,14 @@ input[type="search"] {
   letter-spacing: 0.04em;
   color: var(--accent-strong);
   text-shadow: 1px 1px 0 rgba(255, 255, 255, 0.65);
+}
+
+.headline-export-button {
+  padding: 0.56rem 0.82rem;
+  font-family: var(--font-tracker);
+  font-size: 1.45rem;
+  letter-spacing: 0.02em;
+  line-height: 0.9;
 }
 
 .panel {
@@ -144,6 +159,66 @@ input[type="search"] {
   grid-template-columns: auto auto minmax(220px, 1fr) auto;
   gap: 12px;
   align-items: center;
+}
+
+.randomizer-controls {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 2px solid rgba(139, 112, 119, 0.32);
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.randomizer-run-button {
+  padding: 0.62rem 0.88rem;
+  font-family: var(--font-tracker);
+  font-size: 1.45rem;
+  line-height: 0.9;
+  letter-spacing: 0.02em;
+}
+
+.randomizer-ratio {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-tracker);
+  font-size: 1.3rem;
+  color: var(--muted);
+}
+
+.randomizer-ratio input[type="range"] {
+  width: clamp(130px, 22vw, 240px);
+  accent-color: var(--accent);
+}
+
+.randomizer-ratio input[type="number"] {
+  width: 72px;
+  border: 2px solid var(--border);
+  border-radius: 6px;
+  padding: 0.28rem 0.35rem;
+  background: #fffdf8;
+  color: var(--text);
+  font-family: var(--font-tracker);
+  font-size: 1.2rem;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.randomizer-ratio input[type="number"]::-webkit-outer-spin-button,
+.randomizer-ratio input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.randomizer-hint {
+  color: var(--muted);
+  font-family: var(--font-tracker);
+  font-size: 1.2rem;
+  letter-spacing: 0.02em;
 }
 
 .search-wrap {
@@ -757,6 +832,18 @@ input[type="search"] {
 
   .controls .search-wrap {
     grid-column: 1 / -1;
+  }
+
+  .headline {
+    align-items: center;
+  }
+
+  .randomizer-controls {
+    align-items: stretch;
+  }
+
+  .randomizer-ratio {
+    flex-wrap: wrap;
   }
 
   .slot-panel {

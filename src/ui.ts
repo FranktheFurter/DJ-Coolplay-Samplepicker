@@ -1,11 +1,19 @@
 import { isBrowserAudioExtensionSupported } from "./audioSupport";
 import { fuzzyMatch, normalizeFuzzyQuery } from "./fuzzy";
-import type { AppState, SampleRecord, WaveformPreview } from "./types";
+import type {
+  AppState,
+  RandomizerRequest,
+  SampleRecord,
+  WaveformPreview,
+} from "./types";
 
 interface UIHandlers {
   onPickDirectory: () => void | Promise<void>;
   onRefreshScan: () => void | Promise<void>;
   onResetAssignments: () => void | Promise<void>;
+  onRunRandomizer: (request: RandomizerRequest) => void | Promise<void>;
+  onRandomizerStepRatioChange: (stepRatio: number) => void;
+  onExportAssignments: () => void;
   onSelectRandomSample: () => string | null;
   onSelectPreviousSample: () => string | null;
   onSelectNextSample: () => string | null;
@@ -61,7 +69,16 @@ const DEFAULT_VIRTUAL_ROW_HEIGHT = 72;
 const VIRTUAL_OVERSCAN_ROWS = 8;
 const DEFAULT_VISIBLE_PATH_SEGMENTS = 4;
 const PATH_MATCH_CONTEXT_CHARACTERS = 24;
+const DEFAULT_RANDOMIZER_STEP_RATIO = 0.75;
 type ScrollAlignment = "start" | "center";
+
+function clampRandomizerRatio(value: number): number {
+  if (!Number.isFinite(value)) {
+    return DEFAULT_RANDOMIZER_STEP_RATIO;
+  }
+
+  return Math.max(0, Math.min(1, value));
+}
 
 function formatCount(count: number): string {
   return `${count} Sample${count === 1 ? "" : "s"}`;
@@ -349,6 +366,13 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
         <section class="topbar">
           <div class="headline">
             <h1>Sample Picker</h1>
+            <button
+              type="button"
+              class="secondary-button headline-export-button"
+              data-role="export-assignments"
+            >
+              Export
+            </button>
           </div>
           <div class="panel">
             <div class="controls">
@@ -370,6 +394,39 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
                 <input type="checkbox" data-role="assigned-only" />
                 Nur zugewiesene
               </label>
+            </div>
+            <div class="randomizer-controls">
+              <button
+                type="button"
+                class="secondary-button randomizer-run-button"
+                data-role="run-randomizer"
+                title="Setzt alle Zuweisungen zurueck und belegt je Kategorie die ersten 50 Slots."
+              >
+                Randomizer
+              </button>
+              <label class="randomizer-ratio">
+                <span>Step Ratio</span>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  step="1"
+                  value="75"
+                  data-role="randomizer-ratio-range"
+                />
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="1"
+                  value="75"
+                  data-role="randomizer-ratio-number"
+                  aria-label="Randomizer Step Ratio in Prozent"
+                />
+              </label>
+              <span class="randomizer-hint">
+                0% = harte Spruenge, 100% = lokale Schritte.
+              </span>
             </div>
           </div>
         </section>
@@ -420,7 +477,7 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
                     />
                   </svg>
                 </span>
-                <span>Random</span>
+                <span>Random Pick</span>
               </button>
               <div class="toolbar-nav-stack">
                 <button
@@ -523,6 +580,9 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
   const pickDirectoryButton = root.querySelector<HTMLButtonElement>(
     '[data-role="pick-directory"]',
   );
+  const exportAssignmentsButton = root.querySelector<HTMLButtonElement>(
+    '[data-role="export-assignments"]',
+  );
   const refreshScanButton = root.querySelector<HTMLButtonElement>(
     '[data-role="refresh-scan"]',
   );
@@ -546,6 +606,15 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
   );
   const autoplayToggleInput = root.querySelector<HTMLInputElement>(
     '[data-role="autoplay-toggle"]',
+  );
+  const randomizerRunButton = root.querySelector<HTMLButtonElement>(
+    '[data-role="run-randomizer"]',
+  );
+  const randomizerRatioRangeInput = root.querySelector<HTMLInputElement>(
+    '[data-role="randomizer-ratio-range"]',
+  );
+  const randomizerRatioNumberInput = root.querySelector<HTMLInputElement>(
+    '[data-role="randomizer-ratio-number"]',
   );
   const searchInput = root.querySelector<HTMLInputElement>('[data-role="search"]');
   const assignedOnlyInput = root.querySelector<HTMLInputElement>(
@@ -587,6 +656,7 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
 
   if (
     !pickDirectoryButton ||
+    !exportAssignmentsButton ||
     !refreshScanButton ||
     !resetAssignmentsButton ||
     !randomSampleButton ||
@@ -595,6 +665,9 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
     !nextSelectedButton ||
     !writeSelectedButton ||
     !autoplayToggleInput ||
+    !randomizerRunButton ||
+    !randomizerRatioRangeInput ||
+    !randomizerRatioNumberInput ||
     !searchInput ||
     !assignedOnlyInput ||
     !statusElement ||
@@ -621,6 +694,10 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
   const slotCounterRailElement = slotCounterRail;
   const slotCounterInputElement = slotCounterInput;
   const searchInputElement = searchInput;
+  const exportAssignmentsButtonElement = exportAssignmentsButton;
+  const randomizerRunButtonElement = randomizerRunButton;
+  const randomizerRatioRangeInputElement = randomizerRatioRangeInput;
+  const randomizerRatioNumberInputElement = randomizerRatioNumberInput;
   const slotCategoryElements: SlotCategoryElements[] = [];
   let latestWaveform: WaveformPreview | null = null;
   let latestSelectedSampleId: string | null = null;
@@ -646,6 +723,40 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
   let lastVirtualTotalCount = -1;
   let lastVirtualSelectedSampleId: string | null = null;
   let lastVirtualCurrentAudioId: string | null = null;
+
+  function syncRandomizerRatioInputs(percentValue: number): void {
+    const normalizedPercent = Number.isFinite(percentValue)
+      ? percentValue
+      : DEFAULT_RANDOMIZER_STEP_RATIO * 100;
+    const clampedPercent = Math.max(0, Math.min(100, Math.round(normalizedPercent)));
+    const nextValue = String(clampedPercent);
+    randomizerRatioRangeInputElement.value = nextValue;
+    randomizerRatioNumberInputElement.value = nextValue;
+  }
+
+  function getRandomizerRequest(): RandomizerRequest {
+    const ratio = getRandomizerStepRatioFromInputs();
+
+    return {
+      stepRatio: ratio,
+      categories: slotCategoryElements.map((entry) => ({
+        rangeStart: entry.definition.start,
+        rangeEnd: entry.definition.end,
+        query: entry.input.value.trim(),
+      })),
+    };
+  }
+
+  function getRandomizerStepRatioFromInputs(): number {
+    const parsedRatioPercent = Number.parseFloat(
+      randomizerRatioNumberInputElement.value,
+    );
+    return clampRandomizerRatio(
+      Number.isFinite(parsedRatioPercent)
+        ? parsedRatioPercent / 100
+        : DEFAULT_RANDOMIZER_STEP_RATIO,
+    );
+  }
 
   function readVirtualRowHeight(): number {
     const value = Number.parseFloat(
@@ -1044,13 +1155,42 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
   }
 
   createSlotCategoryElements();
+  syncRandomizerRatioInputs(DEFAULT_RANDOMIZER_STEP_RATIO * 100);
 
   pickDirectoryButton.addEventListener("click", () => {
     void handlers.onPickDirectory();
   });
 
+  exportAssignmentsButtonElement.addEventListener("click", () => {
+    handlers.onExportAssignments();
+  });
+
   refreshScanButton.addEventListener("click", () => {
     void handlers.onRefreshScan();
+  });
+
+  randomizerRunButtonElement.addEventListener("click", () => {
+    const shouldRun = window.confirm(
+      "Randomizer startet neu: Alle aktuellen Zuweisungen werden geloescht. Fortfahren?",
+    );
+
+    if (!shouldRun) {
+      return;
+    }
+
+    void handlers.onRunRandomizer(getRandomizerRequest());
+  });
+
+  randomizerRatioRangeInputElement.addEventListener("input", (event) => {
+    const target = event.currentTarget as HTMLInputElement;
+    syncRandomizerRatioInputs(Number.parseInt(target.value, 10));
+    handlers.onRandomizerStepRatioChange(getRandomizerStepRatioFromInputs());
+  });
+
+  randomizerRatioNumberInputElement.addEventListener("input", (event) => {
+    const target = event.currentTarget as HTMLInputElement;
+    syncRandomizerRatioInputs(Number.parseInt(target.value, 10));
+    handlers.onRandomizerStepRatioChange(getRandomizerStepRatioFromInputs());
   });
 
   resetAssignmentsButton.addEventListener("click", () => {
@@ -1221,13 +1361,24 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
 
   return {
     render(state) {
+      const hasAssignments = state.samples.some(
+        (sample) => sample.slotNumber !== null,
+      );
       pickDirectoryButton.disabled = state.isScanning;
       refreshScanButton.disabled =
         state.isScanning || state.currentDirectoryId === null;
+      exportAssignmentsButtonElement.disabled =
+        state.isScanning || state.currentDirectoryId === null || !hasAssignments;
+      randomizerRunButtonElement.disabled =
+        state.isScanning ||
+        state.currentDirectoryId === null ||
+        state.samples.length === 0;
+      randomizerRatioRangeInputElement.disabled = randomizerRunButtonElement.disabled;
+      randomizerRatioNumberInputElement.disabled = randomizerRunButtonElement.disabled;
       resetAssignmentsButton.disabled =
         state.isScanning ||
         state.currentDirectoryId === null ||
-        !state.samples.some((sample) => sample.slotNumber !== null);
+        !hasAssignments;
       randomSampleButton.disabled =
         state.isScanning ||
         state.currentDirectoryId === null ||
@@ -1257,6 +1408,7 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
 
       searchInput.value = state.query;
       assignedOnlyInput.checked = state.showAssignedOnly;
+      syncRandomizerRatioInputs(state.randomizerStepRatio * 100);
       slotCounterInputElement.value = String(state.slotCounter);
       loopToggleInput.checked = state.loopEnabled;
       autoplayToggleInput.checked = state.autoplayEnabled;

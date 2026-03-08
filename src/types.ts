@@ -41,6 +41,7 @@ export interface AppState {
   filteredSamples: SampleRecord[];
   selectedSampleId: string | null;
   slotCounter: number;
+  randomizerStepRatio: number;
   loopEnabled: boolean;
   autoplayEnabled: boolean;
   query: string;
@@ -52,4 +53,15 @@ export interface AppState {
   currentWaveform: WaveformPreview | null;
   lastScanAt: number | null;
   error: string | null;
+}
+
+export interface RandomizerCategoryConfig {
+  rangeStart: number;
+  rangeEnd: number;
+  query: string;
+}
+
+export interface RandomizerRequest {
+  stepRatio: number;
+  categories: RandomizerCategoryConfig[];
 }
