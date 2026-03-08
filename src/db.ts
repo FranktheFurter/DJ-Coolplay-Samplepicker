@@ -117,11 +117,22 @@ export async function getSamplesForDirectory(
 
   await transactionToPromise(transaction);
 
-  return (samples as SampleRecord[]).sort((left, right) =>
-    left.relativePath.localeCompare(right.relativePath, undefined, {
-      sensitivity: "base",
-    }),
-  );
+  return (samples as SampleRecord[])
+    .map((sample) => ({
+      ...sample,
+      slotNumber:
+        typeof sample.slotNumber === "number" &&
+        Number.isInteger(sample.slotNumber) &&
+        sample.slotNumber >= 1 &&
+        sample.slotNumber <= 999
+          ? sample.slotNumber
+          : null,
+    }))
+    .sort((left, right) =>
+      left.relativePath.localeCompare(right.relativePath, undefined, {
+        sensitivity: "base",
+      }),
+    );
 }
 
 export async function replaceSamplesForDirectory(
@@ -163,9 +174,9 @@ export async function replaceSamplesForDirectory(
   await transactionToPromise(insertTransaction);
 }
 
-export async function updateSampleStar(
+export async function updateSampleSlotNumber(
   sampleId: string,
-  starred: boolean,
+  slotNumber: number | null,
 ): Promise<void> {
   const database = await openDatabase();
   const readTransaction = database.transaction(SAMPLES_STORE, "readonly");
@@ -184,7 +195,7 @@ export async function updateSampleStar(
   const writeTransaction = database.transaction(SAMPLES_STORE, "readwrite");
   writeTransaction.objectStore(SAMPLES_STORE).put({
     ...sample,
-    starred,
+    slotNumber,
   });
 
   await transactionToPromise(writeTransaction);

@@ -19,7 +19,7 @@ export interface SampleRecord {
   size: number;
   lastModified: number;
   categoryGuess: CategoryGuess;
-  starred: boolean;
+  slotNumber: number | null;
 }
 
 export interface PersistedDirectory {
@@ -42,7 +42,7 @@ export interface AppState {
   selectedSampleId: string | null;
   loopEnabled: boolean;
   query: string;
-  showStarredOnly: boolean;
+  showAssignedOnly: boolean;
   currentDirectoryId: string | null;
   currentDirectoryName: string | null;
   isScanning: boolean;

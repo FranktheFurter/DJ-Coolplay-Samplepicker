@@ -7,12 +7,12 @@ function normalizeQuery(value: string): string {
 export function filterSamples(
   samples: SampleRecord[],
   query: string,
-  showStarredOnly: boolean,
+  showAssignedOnly: boolean,
 ): SampleRecord[] {
   const normalizedQuery = normalizeQuery(query);
 
   return samples.filter((sample) => {
-    if (showStarredOnly && !sample.starred) {
+    if (showAssignedOnly && sample.slotNumber === null) {
       return false;
     }
 
@@ -26,4 +26,3 @@ export function filterSamples(
     );
   });
 }
-

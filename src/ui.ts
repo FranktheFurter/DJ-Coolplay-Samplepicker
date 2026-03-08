@@ -4,14 +4,14 @@ interface UIHandlers {
   onPickDirectory: () => void | Promise<void>;
   onRefreshScan: () => void | Promise<void>;
   onSearchChange: (query: string) => void;
-  onStarredOnlyChange: (showStarredOnly: boolean) => void;
+  onAssignedOnlyChange: (showAssignedOnly: boolean) => void;
   onLoopEnabledChange: (loopEnabled: boolean) => void;
   getPlaybackProgress: (
     sampleId: string,
     fallbackDurationSeconds: number,
   ) => number | null;
   onSelectSample: (sampleId: string) => void;
-  onToggleStar: (sampleId: string) => void | Promise<void>;
+  onAssignSlot: (sampleId: string, slotValue: string) => void | Promise<void>;
   onTogglePlay: (sampleId: string) => void | Promise<void>;
 }
 
@@ -180,16 +180,27 @@ function createRow(
   playButton.dataset.id = sample.id;
   playButton.textContent = sample.id === currentAudioId ? "Stop" : "Play";
 
-  const starButton = document.createElement("button");
-  starButton.className = sample.starred
-    ? "row-button active"
-    : "row-button";
-  starButton.type = "button";
-  starButton.dataset.action = "star";
-  starButton.dataset.id = sample.id;
-  starButton.textContent = sample.starred ? "Gemerkt" : "Merken";
+  const slotInput = document.createElement("input");
+  slotInput.className = "slot-input";
+  slotInput.type = "number";
+  slotInput.name = "slot-number";
+  slotInput.min = "1";
+  slotInput.max = "999";
+  slotInput.step = "1";
+  slotInput.placeholder = "Nr.";
+  slotInput.dataset.action = "slot-input";
+  slotInput.dataset.id = sample.id;
+  slotInput.value = sample.slotNumber === null ? "" : String(sample.slotNumber);
 
-  actions.append(playButton, starButton);
+  const assignButton = document.createElement("button");
+  assignButton.className =
+    sample.slotNumber === null ? "row-button" : "row-button active";
+  assignButton.type = "button";
+  assignButton.dataset.action = "assign";
+  assignButton.dataset.id = sample.id;
+  assignButton.textContent = "Setzen";
+
+  actions.append(playButton, slotInput, assignButton);
   row.append(name, path, category, actions);
 
   return row;
@@ -198,77 +209,87 @@ function createRow(
 export function createUI(root: HTMLElement, handlers: UIHandlers): UIController {
   root.innerHTML = `
     <main class="app-shell">
-      <section class="topbar">
-        <div class="headline">
-          <h1>Sample Picker</h1>
-          <p>
-            Lokaler Desktop-MVP fuer schnelles Browsen, Vorhoeren und Merken von
-            Kicks, Snares, Hats und anderem Sample-Material.
-          </p>
-        </div>
-        <div class="panel">
-          <div class="controls">
-            <button type="button" class="primary-button" data-role="pick-directory">
-              Ordner auswaehlen
-            </button>
-            <button type="button" class="secondary-button" data-role="refresh-scan">
-              Ordner aktualisieren
-            </button>
-            <div class="search-wrap">
-              <input
-                type="search"
-                placeholder="Suche nach Name oder Pfad"
-                aria-label="Samples durchsuchen"
-                data-role="search"
-              />
+      <section class="main-column">
+        <section class="topbar">
+          <div class="headline">
+            <h1>Sample Picker</h1>
+            <p>
+              Lokaler Desktop-MVP fuer schnelles Browsen, Vorhoeren und Merken von
+              Kicks, Snares, Hats und anderem Sample-Material.
+            </p>
+          </div>
+          <div class="panel">
+            <div class="controls">
+              <button type="button" class="primary-button" data-role="pick-directory">
+                Ordner auswaehlen
+              </button>
+              <button type="button" class="secondary-button" data-role="refresh-scan">
+                Ordner aktualisieren
+              </button>
+              <div class="search-wrap">
+                <input
+                  type="search"
+                  placeholder="Suche nach Name oder Pfad"
+                  aria-label="Samples durchsuchen"
+                  data-role="search"
+                />
+              </div>
+              <label class="filter-toggle">
+                <input type="checkbox" data-role="assigned-only" />
+                Nur zugewiesene
+              </label>
             </div>
-            <label class="filter-toggle">
-              <input type="checkbox" data-role="starred-only" />
-              Nur gemerkte
-            </label>
           </div>
+        </section>
+
+        <div class="statusbar">
+          <div data-role="status"></div>
+          <div data-role="count"></div>
         </div>
-      </section>
 
-      <div class="statusbar">
-        <div data-role="status"></div>
-        <div data-role="count"></div>
-      </div>
+        <div class="error-box" data-role="error" hidden></div>
 
-      <div class="error-box" data-role="error" hidden></div>
-
-      <section class="waveform-panel" data-role="waveform-panel">
-        <div class="waveform-meta">
-          <strong data-role="waveform-title">Kein Sample aktiv</strong>
-          <div class="waveform-controls">
-            <label class="loop-toggle">
-              <input type="checkbox" data-role="loop-toggle" />
-              Loop
-            </label>
-            <span data-role="waveform-duration">Eintrag waehlen, um Waveform zu sehen</span>
+        <section class="waveform-panel" data-role="waveform-panel">
+          <div class="waveform-meta">
+            <strong data-role="waveform-title">Kein Sample aktiv</strong>
+            <div class="waveform-controls">
+              <label class="loop-toggle">
+                <input type="checkbox" data-role="loop-toggle" />
+                Loop
+              </label>
+              <span data-role="waveform-duration">Eintrag waehlen, um Waveform zu sehen</span>
+            </div>
           </div>
-        </div>
-        <div class="waveform-canvas-wrap">
-          <canvas
-            class="waveform-canvas waveform-canvas-base"
-            data-role="waveform-canvas-base"
-          ></canvas>
-          <canvas
-            class="waveform-canvas waveform-canvas-playhead"
-            data-role="waveform-canvas-playhead"
-          ></canvas>
-        </div>
+          <div class="waveform-canvas-wrap">
+            <canvas
+              class="waveform-canvas waveform-canvas-base"
+              data-role="waveform-canvas-base"
+            ></canvas>
+            <canvas
+              class="waveform-canvas waveform-canvas-playhead"
+              data-role="waveform-canvas-playhead"
+            ></canvas>
+          </div>
+        </section>
+
+        <section class="results">
+          <div class="results-header">
+            <div>Name</div>
+            <div>Pfad</div>
+            <div>Kategorie</div>
+            <div>Aktionen</div>
+          </div>
+          <div class="results-body" data-role="results-body"></div>
+        </section>
       </section>
 
-      <section class="results">
-        <div class="results-header">
-          <div>Name</div>
-          <div>Pfad</div>
-          <div>Kategorie</div>
-          <div>Aktionen</div>
+      <aside class="slot-panel">
+        <div class="slot-panel-header">
+          <strong>Nummern-Matrix</strong>
+          <span data-role="slot-summary">0 / 999 belegt</span>
         </div>
-        <div class="results-body" data-role="results-body"></div>
-      </section>
+        <div class="slot-grid" data-role="slot-grid"></div>
+      </aside>
     </main>
   `;
 
@@ -279,8 +300,8 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
     '[data-role="refresh-scan"]',
   );
   const searchInput = root.querySelector<HTMLInputElement>('[data-role="search"]');
-  const starredOnlyInput = root.querySelector<HTMLInputElement>(
-    '[data-role="starred-only"]',
+  const assignedOnlyInput = root.querySelector<HTMLInputElement>(
+    '[data-role="assigned-only"]',
   );
   const statusElement = root.querySelector<HTMLDivElement>('[data-role="status"]');
   const countElement = root.querySelector<HTMLDivElement>('[data-role="count"]');
@@ -306,12 +327,14 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
   const resultsBody = root.querySelector<HTMLDivElement>(
     '[data-role="results-body"]',
   );
+  const slotSummary = root.querySelector<HTMLElement>('[data-role="slot-summary"]');
+  const slotGrid = root.querySelector<HTMLDivElement>('[data-role="slot-grid"]');
 
   if (
     !pickDirectoryButton ||
     !refreshScanButton ||
     !searchInput ||
-    !starredOnlyInput ||
+    !assignedOnlyInput ||
     !statusElement ||
     !countElement ||
     !errorElement ||
@@ -321,13 +344,17 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
     !loopToggleInput ||
     !waveformBaseCanvas ||
     !waveformPlayheadCanvas ||
-    !resultsBody
+    !resultsBody ||
+    !slotSummary ||
+    !slotGrid
   ) {
     throw new Error("UI konnte nicht initialisiert werden.");
   }
 
   const waveformBaseCanvasElement = waveformBaseCanvas;
   const waveformPlayheadCanvasElement = waveformPlayheadCanvas;
+  const slotSummaryElement = slotSummary;
+  const slotGridElement = slotGrid;
   let latestWaveform: WaveformPreview | null = null;
   let latestSelectedSampleId: string | null = null;
   let latestCurrentAudioId: string | null = null;
@@ -385,6 +412,43 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
     }
   }
 
+  function renderSlotMatrix(state: AppState): void {
+    const assignedSlots = new Set<number>();
+
+    for (const sample of state.samples) {
+      if (sample.slotNumber !== null) {
+        assignedSlots.add(sample.slotNumber);
+      }
+    }
+
+    const selectedSlotNumber =
+      state.samples.find((sample) => sample.id === state.selectedSampleId)
+        ?.slotNumber ?? null;
+
+    slotSummaryElement.textContent = `${assignedSlots.size} / 999 belegt`;
+    slotGridElement.replaceChildren();
+
+    const fragment = document.createDocumentFragment();
+
+    for (let slot = 1; slot <= 999; slot += 1) {
+      const cell = document.createElement("div");
+      cell.className = "slot-cell";
+      cell.textContent = String(slot);
+
+      if (assignedSlots.has(slot)) {
+        cell.classList.add("is-assigned");
+      }
+
+      if (selectedSlotNumber === slot) {
+        cell.classList.add("is-selected");
+      }
+
+      fragment.append(cell);
+    }
+
+    slotGridElement.append(fragment);
+  }
+
   pickDirectoryButton.addEventListener("click", () => {
     void handlers.onPickDirectory();
   });
@@ -398,9 +462,9 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
     handlers.onSearchChange(target.value);
   });
 
-  starredOnlyInput.addEventListener("change", (event) => {
+  assignedOnlyInput.addEventListener("change", (event) => {
     const target = event.currentTarget as HTMLInputElement;
-    handlers.onStarredOnlyChange(target.checked);
+    handlers.onAssignedOnlyChange(target.checked);
   });
 
   loopToggleInput.addEventListener("change", (event) => {
@@ -426,10 +490,18 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
         return;
       }
 
-      if (action === "star") {
-        void handlers.onToggleStar(sampleId);
+      if (action === "assign") {
+        const row = button.closest<HTMLDivElement>(".sample-row");
+        const slotInput = row?.querySelector<HTMLInputElement>(
+          'input[data-action="slot-input"]',
+        );
+        void handlers.onAssignSlot(sampleId, slotInput?.value ?? "");
       }
 
+      return;
+    }
+
+    if (target.closest('input[data-action="slot-input"]')) {
       return;
     }
 
@@ -442,13 +514,34 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
     handlers.onSelectSample(row.dataset.id);
   });
 
+  resultsBody.addEventListener("keydown", (event) => {
+    const target = event.target as HTMLElement;
+
+    if (!(target instanceof HTMLInputElement)) {
+      return;
+    }
+
+    if (target.dataset.action !== "slot-input" || event.key !== "Enter") {
+      return;
+    }
+
+    const sampleId = target.dataset.id;
+
+    if (!sampleId) {
+      return;
+    }
+
+    event.preventDefault();
+    void handlers.onAssignSlot(sampleId, target.value);
+  });
+
   return {
     render(state) {
       pickDirectoryButton.disabled = state.isScanning;
       refreshScanButton.disabled =
         state.isScanning || state.currentDirectoryId === null;
       searchInput.value = state.query;
-      starredOnlyInput.checked = state.showStarredOnly;
+      assignedOnlyInput.checked = state.showAssignedOnly;
       loopToggleInput.checked = state.loopEnabled;
 
       statusElement.textContent = formatStatus(state);
@@ -480,6 +573,7 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
       latestWaveform = state.currentWaveform;
       drawWaveform(waveformBaseCanvasElement, latestWaveform);
       syncPlayheadAnimation();
+      renderSlotMatrix(state);
 
       resultsBody.replaceChildren();
 

@@ -8,7 +8,7 @@ export const initialAppState: AppState = {
   selectedSampleId: null,
   loopEnabled: false,
   query: "",
-  showStarredOnly: false,
+  showAssignedOnly: false,
   currentDirectoryId: null,
   currentDirectoryName: null,
   isScanning: false,

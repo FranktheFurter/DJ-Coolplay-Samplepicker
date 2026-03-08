@@ -96,7 +96,7 @@ export async function scanDirectory(
         size: file.size,
         lastModified: file.lastModified,
         categoryGuess: guessCategory(relativePath),
-        starred: false,
+        slotNumber: null,
       });
     }
   }
@@ -129,4 +129,3 @@ export async function getFileFromRelativePath(
   const fileHandle = await currentDirectory.getFileHandle(segments.at(-1)!);
   return fileHandle.getFile();
 }
-

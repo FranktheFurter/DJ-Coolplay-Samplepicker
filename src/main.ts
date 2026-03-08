@@ -4,7 +4,7 @@ import {
   getSamplesForDirectory,
   replaceSamplesForDirectory,
   saveDirectory,
-  updateSampleStar,
+  updateSampleSlotNumber,
 } from "./db";
 import {
   createPersistedDirectory,
@@ -32,7 +32,7 @@ function deriveState(nextState: AppState): AppState {
   const filteredSamples = filterSamples(
     nextState.samples,
     nextState.query,
-    nextState.showStarredOnly,
+    nextState.showAssignedOnly,
   );
   let selectedSampleId = nextState.selectedSampleId;
 
@@ -73,9 +73,11 @@ async function ensureReadPermission(
   return (await handle.requestPermission(options)) === "granted";
 }
 
-function buildStarMap(samples: SampleRecord[]): Map<string, boolean> {
+function buildSlotMap(samples: SampleRecord[]): Map<string, number> {
   return new Map(
-    samples.map((sample) => [sample.relativePath.toLowerCase(), sample.starred]),
+    samples
+      .filter((sample) => sample.slotNumber !== null)
+      .map((sample) => [sample.relativePath.toLowerCase(), sample.slotNumber!]),
   );
 }
 
@@ -156,12 +158,12 @@ async function runScan(directory: PersistedDirectory): Promise<void> {
     }
 
     const previousSamples = await getSamplesForDirectory(directory.id);
-    const starMap = buildStarMap(previousSamples);
+    const slotMap = buildSlotMap(previousSamples);
     const scannedSamples = await scanDirectory(directory.handle, directory.id);
 
     const mergedSamples = scannedSamples.map((sample) => ({
       ...sample,
-      starred: starMap.get(sample.relativePath.toLowerCase()) ?? false,
+      slotNumber: slotMap.get(sample.relativePath.toLowerCase()) ?? null,
     }));
 
     await replaceSamplesForDirectory(directory.id, mergedSamples);
@@ -255,8 +257,8 @@ function handleSearchChange(query: string): void {
   commitState({ query });
 }
 
-function handleStarredOnlyChange(showStarredOnly: boolean): void {
-  commitState({ showStarredOnly });
+function handleAssignedOnlyChange(showAssignedOnly: boolean): void {
+  commitState({ showAssignedOnly });
 }
 
 function handleLoopEnabledChange(loopEnabled: boolean): void {
@@ -285,7 +287,10 @@ function handlePlaybackProgress(
   return audioPreview.getPlayheadProgress(sampleId, fallbackDurationSeconds);
 }
 
-async function handleToggleStar(sampleId: string): Promise<void> {
+async function handleAssignSlot(
+  sampleId: string,
+  rawSlotValue: string,
+): Promise<void> {
   const previousSamples = store.getState().samples;
   const sample = previousSamples.find((entry) => entry.id === sampleId);
 
@@ -293,22 +298,51 @@ async function handleToggleStar(sampleId: string): Promise<void> {
     return;
   }
 
-  const nextStarredValue = !sample.starred;
+  const trimmedValue = rawSlotValue.trim();
+  const nextSlotNumber =
+    trimmedValue.length === 0 ? null : Number.parseInt(trimmedValue, 10);
+
+  if (
+    nextSlotNumber !== null &&
+    (!Number.isInteger(nextSlotNumber) || nextSlotNumber < 1 || nextSlotNumber > 999)
+  ) {
+    commitState({
+      error: "Bitte eine ganze Zahl von 1 bis 999 eingeben.",
+    });
+    return;
+  }
+
+  const conflictingSampleId =
+    nextSlotNumber === null
+      ? null
+      : previousSamples.find(
+          (entry) =>
+            entry.id !== sampleId && entry.slotNumber === nextSlotNumber,
+        )?.id ?? null;
+
   const nextSamples = previousSamples.map((entry) =>
-    entry.id === sampleId ? { ...entry, starred: nextStarredValue } : entry,
+    entry.id === sampleId
+      ? { ...entry, slotNumber: nextSlotNumber }
+      : conflictingSampleId !== null && entry.id === conflictingSampleId
+        ? { ...entry, slotNumber: null }
+        : entry,
   );
 
-  commitState({ samples: nextSamples });
+  commitState({ samples: nextSamples, error: null });
 
   try {
-    await updateSampleStar(sampleId, nextStarredValue);
+    await updateSampleSlotNumber(sampleId, nextSlotNumber);
+
+    if (conflictingSampleId !== null) {
+      await updateSampleSlotNumber(conflictingSampleId, null);
+    }
   } catch (error) {
     commitState({
       samples: previousSamples,
       error:
         error instanceof Error
           ? error.message
-          : "Konnte Merker nicht speichern.",
+          : "Konnte Slot-Zuweisung nicht speichern.",
     });
   }
 }
@@ -361,11 +395,11 @@ const ui = createUI(appRoot, {
   onPickDirectory: handlePickDirectory,
   onRefreshScan: handleRefreshScan,
   onSearchChange: handleSearchChange,
-  onStarredOnlyChange: handleStarredOnlyChange,
+  onAssignedOnlyChange: handleAssignedOnlyChange,
   onLoopEnabledChange: handleLoopEnabledChange,
   getPlaybackProgress: handlePlaybackProgress,
   onSelectSample: handleSelectSample,
-  onToggleStar: handleToggleStar,
+  onAssignSlot: handleAssignSlot,
   onTogglePlay: handleTogglePlay,
 });
 
