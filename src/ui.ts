@@ -53,16 +53,16 @@ interface SlotCategoryElements {
 }
 
 const SLOT_CATEGORY_DEFINITIONS: SlotCategoryDefinition[] = [
-  { key: "kicks", label: "Kicks", start: 1, end: 99 },
-  { key: "snares", label: "Snares", start: 100, end: 199 },
-  { key: "cymbals", label: "Cymbals", start: 200, end: 299 },
+  { key: "kicks", label: "Kick", start: 1, end: 99 },
+  { key: "snares", label: "Snare", start: 100, end: 199 },
+  { key: "cymbals", label: "Cymbal", start: 200, end: 299 },
   { key: "perc", label: "Perc", start: 300, end: 399 },
   { key: "bass", label: "Bass", start: 400, end: 499 },
-  { key: "leads", label: "Leads", start: 500, end: 599 },
-  { key: "skanks", label: "Skanks", start: 600, end: 699 },
-  { key: "voxfx", label: "Vox & Fx", start: 700, end: 799 },
-  { key: "loops", label: "Loops", start: 800, end: 899 },
-  { key: "user", label: "User", start: 900, end: 999 },
+  { key: "leads", label: "Lead", start: 500, end: 599 },
+  { key: "skanks", label: "Pad", start: 600, end: 699 },
+  { key: "voxfx", label: "Vox", start: 700, end: 799 },
+  { key: "loops", label: "FX", start: 800, end: 899 },
+  { key: "user", label: "Breakbeat", start: 900, end: 999 },
 ];
 
 const DEFAULT_VIRTUAL_ROW_HEIGHT = 72;
