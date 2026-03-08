@@ -73,12 +73,19 @@ button {
   transition:
     transform 120ms ease,
     border-color 120ms ease,
-    background 120ms ease;
+    background 120ms ease,
+    box-shadow 120ms ease;
 }
 
 button:hover:enabled {
   transform: translate(-1px, -1px);
   border-color: var(--accent);
+}
+
+button:active:enabled,
+button.is-pressed:enabled {
+  transform: translate(1px, 1px);
+  box-shadow: 1px 1px 0 rgba(73, 44, 53, 0.28);
 }
 
 button:disabled {

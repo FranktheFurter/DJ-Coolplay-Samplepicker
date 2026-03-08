@@ -70,6 +70,8 @@ const VIRTUAL_OVERSCAN_ROWS = 8;
 const DEFAULT_VISIBLE_PATH_SEGMENTS = 4;
 const PATH_MATCH_CONTEXT_CHARACTERS = 24;
 const DEFAULT_RANDOMIZER_STEP_RATIO = 0.75;
+const BUTTON_PRESS_ANIMATION_MS = 130;
+const BUTTON_PRESS_EASING = "cubic-bezier(0.22, 0.61, 0.36, 1)";
 type ScrollAlignment = "start" | "center";
 
 function clampRandomizerRatio(value: number): number {
@@ -723,6 +725,7 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
   let lastVirtualTotalCount = -1;
   let lastVirtualSelectedSampleId: string | null = null;
   let lastVirtualCurrentAudioId: string | null = null;
+  const pressAnimationByButton = new WeakMap<HTMLButtonElement, Animation>();
 
   function syncRandomizerRatioInputs(percentValue: number): void {
     const normalizedPercent = Number.isFinite(percentValue)
@@ -958,6 +961,54 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
     return tagName === "INPUT" || tagName === "TEXTAREA" || tagName === "SELECT";
   }
 
+  function animateButtonPress(button: HTMLButtonElement): void {
+    const previousAnimation = pressAnimationByButton.get(button);
+
+    if (previousAnimation) {
+      previousAnimation.cancel();
+      pressAnimationByButton.delete(button);
+    }
+
+    button.classList.remove("is-pressed");
+
+    if (typeof button.animate !== "function") {
+      button.classList.add("is-pressed");
+      window.setTimeout(() => {
+        button.classList.remove("is-pressed");
+      }, BUTTON_PRESS_ANIMATION_MS);
+      return;
+    }
+
+    const animation = button.animate(
+      [
+        {
+          transform: "translate(1px, 1px)",
+          boxShadow: "1px 1px 0 rgba(73, 44, 53, 0.28)",
+        },
+        {
+          transform: "translate(0px, 0px)",
+          boxShadow: "2px 2px 0 rgba(73, 44, 53, 0.24)",
+        },
+      ],
+      {
+        duration: BUTTON_PRESS_ANIMATION_MS,
+        easing: BUTTON_PRESS_EASING,
+      },
+    );
+
+    pressAnimationByButton.set(button, animation);
+    animation.addEventListener("finish", () => {
+      if (pressAnimationByButton.get(button) === animation) {
+        pressAnimationByButton.delete(button);
+      }
+    });
+    animation.addEventListener("cancel", () => {
+      if (pressAnimationByButton.get(button) === animation) {
+        pressAnimationByButton.delete(button);
+      }
+    });
+  }
+
   function triggerToolbarButton(button: HTMLButtonElement): boolean {
     if (button.disabled) {
       return false;
@@ -1158,6 +1209,7 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
   syncRandomizerRatioInputs(DEFAULT_RANDOMIZER_STEP_RATIO * 100);
 
   pickDirectoryButton.addEventListener("click", () => {
+    animateButtonPress(pickDirectoryButton);
     void handlers.onPickDirectory();
   });
 
@@ -1206,22 +1258,27 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
   });
 
   randomSampleButton.addEventListener("click", () => {
+    animateButtonPress(randomSampleButton);
     selectAndCenter(handlers.onSelectRandomSample, "center");
   });
 
   previousSelectedButton.addEventListener("click", () => {
+    animateButtonPress(previousSelectedButton);
     selectAndCenter(handlers.onSelectPreviousSample, "center");
   });
 
   playSelectedButton.addEventListener("click", () => {
+    animateButtonPress(playSelectedButton);
     void handlers.onPlaySelectedSample();
   });
 
   nextSelectedButton.addEventListener("click", () => {
+    animateButtonPress(nextSelectedButton);
     selectAndCenter(handlers.onSelectNextSample, "center");
   });
 
   writeSelectedButton.addEventListener("click", () => {
+    animateButtonPress(writeSelectedButton);
     void handlers.onWriteSelectedSample();
   });
 
