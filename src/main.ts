@@ -883,13 +883,19 @@ function handleSelectSample(sampleId: string): void {
 
 function handleSelectRandomSample(): string | null {
   const state = store.getState();
-  const candidates = state.filteredSamples;
+  const candidates = state.filteredSamples.filter(
+    (sample) => sample.slotNumber === null,
+  );
 
   if (candidates.length === 0) {
+    commitState({
+      error: "Keine unzugewiesenen Samples in der aktuellen Trefferliste.",
+    });
     return null;
   }
 
   if (candidates.length === 1) {
+    commitState({ error: null });
     handleSelectSample(candidates[0].id);
     return candidates[0].id;
   }
@@ -899,13 +905,15 @@ function handleSelectRandomSample(): string | null {
     currentSelectedSampleId === null
       ? candidates
       : candidates.filter((sample) => sample.id !== currentSelectedSampleId);
-  const randomIndex = Math.floor(Math.random() * pool.length);
-  const randomSample = pool[randomIndex];
+  const effectivePool = pool.length > 0 ? pool : candidates;
+  const randomIndex = Math.floor(Math.random() * effectivePool.length);
+  const randomSample = effectivePool[randomIndex];
 
   if (!randomSample) {
     return null;
   }
 
+  commitState({ error: null });
   handleSelectSample(randomSample.id);
   return randomSample.id;
 }
