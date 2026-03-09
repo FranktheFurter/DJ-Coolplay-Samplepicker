@@ -725,6 +725,8 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
   let lastVirtualTotalCount = -1;
   let lastVirtualSelectedSampleId: string | null = null;
   let lastVirtualCurrentAudioId: string | null = null;
+  let lastRenderedQuery = "";
+  let lastRenderedAssignedOnly = false;
   const pressAnimationByButton = new WeakMap<HTMLButtonElement, Animation>();
 
   function syncRandomizerRatioInputs(percentValue: number): void {
@@ -822,15 +824,30 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
 
     virtualRowHeight = readVirtualRowHeight();
     const viewportHeight = Math.max(virtualRowHeight, resultsBodyElement.clientHeight);
-    const scrollTop = Math.max(0, resultsBodyElement.scrollTop);
+    const totalHeight = totalCount * virtualRowHeight;
+    const maxScrollTop = Math.max(0, totalHeight - viewportHeight);
+    const unclampedScrollTop = Math.max(0, resultsBodyElement.scrollTop);
+    const scrollTop = Math.min(unclampedScrollTop, maxScrollTop);
+
+    if (scrollTop !== unclampedScrollTop) {
+      resultsBodyElement.scrollTop = scrollTop;
+    }
+
     const visibleCount = Math.max(1, Math.ceil(viewportHeight / virtualRowHeight));
+    const firstVisibleIndex = Math.min(
+      totalCount - 1,
+      Math.floor(scrollTop / virtualRowHeight),
+    );
     const startIndex = Math.max(
       0,
-      Math.floor(scrollTop / virtualRowHeight) - VIRTUAL_OVERSCAN_ROWS,
+      firstVisibleIndex - VIRTUAL_OVERSCAN_ROWS,
     );
     const endIndex = Math.min(
       totalCount,
-      startIndex + visibleCount + VIRTUAL_OVERSCAN_ROWS * 2,
+      Math.max(
+        firstVisibleIndex + visibleCount + VIRTUAL_OVERSCAN_ROWS,
+        startIndex + visibleCount + VIRTUAL_OVERSCAN_ROWS * 2,
+      ),
     );
 
     if (
@@ -1463,7 +1480,22 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
         !isBrowserAudioExtensionSupported(selectedSample.extension);
       writeSelectedButton.disabled = !canUseSelectedSampleActions;
 
+      const assignedOnlyModeActive = state.showAssignedOnly;
+      const effectiveNormalizedQuery = assignedOnlyModeActive
+        ? ""
+        : normalizeFuzzyQuery(state.query);
+      const filterModeChanged =
+        state.query !== lastRenderedQuery ||
+        assignedOnlyModeActive !== lastRenderedAssignedOnly;
+
+      lastRenderedQuery = state.query;
+      lastRenderedAssignedOnly = assignedOnlyModeActive;
+
       searchInput.value = state.query;
+      searchInput.disabled = assignedOnlyModeActive;
+      searchInput.title = assignedOnlyModeActive
+        ? "Suchfilter pausiert, solange nur zugewiesene Samples angezeigt werden."
+        : "";
       assignedOnlyInput.checked = state.showAssignedOnly;
       syncRandomizerRatioInputs(state.randomizerStepRatio * 100);
       slotCounterInputElement.value = String(state.slotCounter);
@@ -1525,8 +1557,15 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
       virtualSamples = state.filteredSamples;
       virtualSelectedSampleId = state.selectedSampleId;
       virtualCurrentAudioId = state.currentAudioId;
-      virtualNormalizedQuery = normalizeFuzzyQuery(state.query);
+      virtualNormalizedQuery = effectiveNormalizedQuery;
       ensureVirtualListMounted();
+
+      if (filterModeChanged) {
+        if (!state.selectedSampleId || !scrollSampleInResults(state.selectedSampleId, "start")) {
+          resultsBodyElement.scrollTop = 0;
+          invalidateVirtualWindow();
+        }
+      }
 
       if (pendingCategoryFirstResultScroll) {
         pendingCategoryFirstResultScroll = false;
