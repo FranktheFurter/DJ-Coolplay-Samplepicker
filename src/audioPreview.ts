@@ -3,26 +3,33 @@ interface PlaybackSample {
 }
 
 export class AudioPreviewController {
-  private audio: HTMLAudioElement | null = null;
+  private readonly audio: HTMLAudioElement;
   private objectUrl: string | null = null;
   private currentSampleId: string | null = null;
   private loopEnabled = false;
+  private playbackRequestId = 0;
 
-  constructor(private readonly onPlaybackChange: (sampleId: string | null) => void) {}
+  constructor(private readonly onPlaybackChange: (sampleId: string | null) => void) {
+    this.audio = new Audio();
+    this.audio.preload = "auto";
+    this.audio.addEventListener("ended", () => {
+      this.resetPlayback();
+    });
+    this.audio.addEventListener("error", () => {
+      this.resetPlayback();
+    });
+  }
 
   setLoopEnabled(loopEnabled: boolean): void {
     this.loopEnabled = loopEnabled;
-
-    if (this.audio) {
-      this.audio.loop = loopEnabled;
-    }
+    this.audio.loop = loopEnabled;
   }
 
   getPlayheadProgress(
     sampleId: string,
     fallbackDurationSeconds: number,
   ): number | null {
-    if (!this.audio || this.currentSampleId !== sampleId || this.audio.paused) {
+    if (this.currentSampleId !== sampleId || this.audio.paused) {
       return null;
     }
 
@@ -59,24 +66,23 @@ export class AudioPreviewController {
   }
 
   stop(): void {
-    if (this.audio) {
-      this.audio.pause();
-      this.audio.currentTime = 0;
-    }
-
-    this.clear();
+    this.playbackRequestId += 1;
+    this.resetPlayback();
   }
 
-  private clear(): void {
-    if (this.audio) {
-      this.audio.src = "";
-      this.audio = null;
-    }
-
+  private revokeObjectUrl(): void {
     if (this.objectUrl) {
       URL.revokeObjectURL(this.objectUrl);
       this.objectUrl = null;
     }
+  }
+
+  private resetPlayback(): void {
+    this.audio.pause();
+    this.audio.currentTime = 0;
+    this.audio.loop = this.loopEnabled;
+    this.audio.src = "";
+    this.revokeObjectUrl();
 
     if (this.currentSampleId !== null) {
       this.currentSampleId = null;
@@ -93,40 +99,45 @@ export class AudioPreviewController {
     if (
       allowToggleStop &&
       this.currentSampleId === sample.id &&
-      this.audio &&
       !this.audio.paused
     ) {
       this.stop();
       return;
     }
 
-    this.stop();
+    const requestId = ++this.playbackRequestId;
+    this.resetPlayback();
 
     const file = await getFile();
+
+    if (requestId !== this.playbackRequestId) {
+      return;
+    }
+
     const url = URL.createObjectURL(file);
-    const audio = new Audio(url);
-    audio.loop = loopEnabled;
-
-    audio.addEventListener("ended", () => {
-      this.clear();
-    });
-
-    audio.addEventListener("error", () => {
-      this.clear();
-    });
-
-    this.audio = audio;
+    this.revokeObjectUrl();
     this.objectUrl = url;
+    this.audio.src = url;
+    this.audio.currentTime = 0;
+    this.audio.loop = loopEnabled;
     this.currentSampleId = sample.id;
     this.onPlaybackChange(sample.id);
 
     try {
-      await audio.play();
-      if (this.audio === audio && this.currentSampleId === sample.id) {
+      await this.audio.play();
+
+      if (
+        requestId === this.playbackRequestId &&
+        this.currentSampleId === sample.id
+      ) {
         this.onPlaybackChange(sample.id);
       }
     } catch (error) {
-      this.clear();
+      if (requestId !== this.playbackRequestId) {
+        return;
+      }
+
+      this.resetPlayback();
       throw error;
     }
   }
