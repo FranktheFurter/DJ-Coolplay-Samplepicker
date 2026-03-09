@@ -1,14 +1,3 @@
-export type CategoryGuess =
-  | "kick"
-  | "snare"
-  | "hat"
-  | "clap"
-  | "perc"
-  | "fx"
-  | "loop"
-  | "bass"
-  | "unknown";
-
 export interface SampleRecord {
   id: string;
   directoryId: string;
@@ -18,7 +7,6 @@ export interface SampleRecord {
   extension: string;
   size: number;
   lastModified: number;
-  categoryGuess: CategoryGuess;
   slotNumber: number | null;
 }
 

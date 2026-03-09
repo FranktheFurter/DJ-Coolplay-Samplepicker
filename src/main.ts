@@ -481,17 +481,12 @@ function handleExportAssignments(): void {
   }
 
   const rows = assignedSamples.map((sample) =>
-    [
-      String(sample.slotNumber ?? ""),
-      sample.name,
-      sample.relativePath,
-      sample.categoryGuess,
-    ]
+    [String(sample.slotNumber ?? ""), sample.name, sample.relativePath]
       .map(escapeCsvField)
       .join(","),
   );
   const csv = [
-    ["slotNumber", "sampleName", "relativePath", "categoryGuess"]
+    ["slotNumber", "sampleName", "relativePath"]
       .map(escapeCsvField)
       .join(","),
     ...rows,

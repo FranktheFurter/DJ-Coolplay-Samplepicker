@@ -1,19 +1,5 @@
-import type { CategoryGuess, SampleRecord, ScanProgress } from "./types";
+import type { SampleRecord, ScanProgress } from "./types";
 import { isSupportedSampleExtension } from "./sampleFormats";
-
-const CATEGORY_RULES: Array<{
-  category: CategoryGuess;
-  pattern: RegExp;
-}> = [
-  { category: "kick", pattern: /\b(kick|bd)\b/ },
-  { category: "snare", pattern: /\b(snare|sd)\b/ },
-  { category: "hat", pattern: /\b(hihat|hi hat|hat|hh)\b/ },
-  { category: "clap", pattern: /\b(clap)\b/ },
-  { category: "perc", pattern: /\b(perc|percussion|tom|rim|shaker)\b/ },
-  { category: "fx", pattern: /\b(fx|sfx|impact|riser|sweep|texture)\b/ },
-  { category: "loop", pattern: /\b(loop|toploop|top loop)\b/ },
-  { category: "bass", pattern: /\b(bass|sub)\b/ },
-];
 
 const MACOS_METADATA_DIRECTORIES = new Set(["__macosx"]);
 const SCAN_PROGRESS_REPORT_INTERVAL_MS = 100;
@@ -47,18 +33,6 @@ function normalizeText(value: string): string {
 function getExtension(fileName: string): string {
   const segments = fileName.split(".");
   return segments.length > 1 ? segments.at(-1)!.toLowerCase() : "";
-}
-
-function guessCategory(value: string): CategoryGuess {
-  const normalizedValue = normalizeText(value);
-
-  for (const rule of CATEGORY_RULES) {
-    if (rule.pattern.test(normalizedValue)) {
-      return rule.category;
-    }
-  }
-
-  return "unknown";
 }
 
 export function createPersistedDirectory(
@@ -209,7 +183,6 @@ export async function scanDirectory(
         extension,
         size: file.size,
         lastModified: file.lastModified,
-        categoryGuess: guessCategory(relativePath),
         slotNumber: null,
       });
 

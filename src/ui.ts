@@ -288,12 +288,6 @@ function createRow(
   const pathPreview = formatPathPreview(directoryPath, normalizedQuery);
   applyFuzzyHighlight(path, pathPreview, normalizedQuery);
 
-  const category = document.createElement("div");
-  const categoryBadge = document.createElement("span");
-  categoryBadge.className = "category-badge";
-  categoryBadge.textContent = sample.categoryGuess;
-  category.append(categoryBadge);
-
   const actions = document.createElement("div");
   actions.className = "row-actions";
 
@@ -323,7 +317,7 @@ function createRow(
   writeButton.textContent = "Write";
 
   actions.append(playButton, slotIndicator, writeButton);
-  row.append(name, path, category, actions);
+  row.append(name, path, actions);
 
   return row;
 }
@@ -666,7 +660,6 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
           <div class="results-header">
             <div>Name</div>
             <div>Pfad</div>
-            <div>Kategorie</div>
             <div>Aktionen</div>
           </div>
           <div class="results-body" data-role="results-body"></div>
