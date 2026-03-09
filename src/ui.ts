@@ -67,6 +67,11 @@ interface ThemeOption {
   contrast: string;
 }
 
+interface KeyboardPressState {
+  intensity: number;
+  lastPressedAt: number;
+}
+
 const SLOT_CATEGORY_DEFINITIONS: SlotCategoryDefinition[] = [
   { key: "kicks", label: "Kick", start: 1, end: 99 },
   { key: "snares", label: "Snare", start: 100, end: 199 },
@@ -85,6 +90,9 @@ const VIRTUAL_OVERSCAN_ROWS = 8;
 const DEFAULT_VISIBLE_PATH_SEGMENTS = 4;
 const PATH_MATCH_CONTEXT_CHARACTERS = 24;
 const BUTTON_PRESS_ANIMATION_MS = 130;
+const KEYBOARD_BUTTON_PRESS_ANIMATION_MS = 240;
+const SPACEBAR_PRESS_ANIMATION_BASE_MS = 300;
+const KEYBOARD_PRESS_DECAY_MS = 700;
 const BUTTON_PRESS_EASING = "cubic-bezier(0.22, 0.61, 0.36, 1)";
 const ROOT_DIRECTORY_LABEL = "Ordnerwurzel";
 const THEME_STORAGE_KEY = "sample-picker-theme";
@@ -954,6 +962,10 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
   let lastRenderedQuery = "";
   let lastRenderedAssignedOnly = false;
   const pressAnimationByButton = new WeakMap<HTMLButtonElement, Animation>();
+  const keyboardPressStateByButton = new WeakMap<
+    HTMLButtonElement,
+    KeyboardPressState
+  >();
 
   function getExportAssignmentsRequest(): ExportAssignmentsRequest {
     return {
@@ -1197,22 +1209,196 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
       return;
     }
 
-    const animation = button.animate(
-      [
-        {
-          transform: "translate(1px, 1px)",
-          boxShadow: "1px 1px 0 rgba(73, 44, 53, 0.28)",
-        },
-        {
-          transform: "translate(0px, 0px)",
-          boxShadow: "2px 2px 0 rgba(73, 44, 53, 0.24)",
-        },
-      ],
-      {
-        duration: BUTTON_PRESS_ANIMATION_MS,
-        easing: BUTTON_PRESS_EASING,
-      },
-    );
+    const isKeyboardClusterButton = button.closest(".keyboard-cluster") !== null;
+    const buttonStyles = window.getComputedStyle(button);
+    const borderColor = buttonStyles.borderColor;
+    const glowColor = buttonStyles.color;
+    const isSpacebar = button.classList.contains("toolbar-spacebar");
+    const now = performance.now();
+    const previousKeyboardState = keyboardPressStateByButton.get(button);
+    const decayedIntensity = previousKeyboardState
+      ? previousKeyboardState.intensity *
+        Math.exp(
+          -(now - previousKeyboardState.lastPressedAt) / KEYBOARD_PRESS_DECAY_MS,
+        )
+      : 0;
+    const nextIntensity = isKeyboardClusterButton
+      ? Math.min(
+          isSpacebar ? 4.8 : 3.5,
+          decayedIntensity + (isSpacebar ? 1.05 : 0.78),
+        )
+      : 0;
+
+    if (isKeyboardClusterButton) {
+      keyboardPressStateByButton.set(button, {
+        intensity: nextIntensity,
+        lastPressedAt: now,
+      });
+    }
+
+    const directionX = (Math.random() - 0.5) * (isSpacebar ? 1 : 0.82);
+    const directionY = (Math.random() - 0.5) * 0.72;
+    const rotationDirection = (Math.random() - 0.5) * (isSpacebar ? 1.4 : 1.1);
+    const driftX = directionX * (isSpacebar ? 8.5 : 6.4) * nextIntensity;
+    const driftY = directionY * (isSpacebar ? 4.8 : 3.8) * nextIntensity;
+    const settleX = directionX * -2.4 * nextIntensity;
+    const settleY = Math.max(0.5, 1 + Math.abs(directionY) * nextIntensity * 0.7);
+    const peakRotation = rotationDirection * nextIntensity * (isSpacebar ? 1.1 : 0.85);
+    const settleRotation = rotationDirection * nextIntensity * -0.36;
+    const pressScaleX = isSpacebar
+      ? 0.986 - Math.min(0.018, nextIntensity * 0.003)
+      : 0.982 - Math.min(0.014, nextIntensity * 0.0024);
+    const pressScaleY = isSpacebar
+      ? 0.956 - Math.min(0.03, nextIntensity * 0.004)
+      : 0.968 - Math.min(0.022, nextIntensity * 0.0032);
+    const bounceScaleX = 1.008 + Math.min(0.026, nextIntensity * 0.005);
+    const bounceScaleY = 1.012 + Math.min(0.03, nextIntensity * 0.0056);
+    const animation = isKeyboardClusterButton
+      ? isSpacebar
+        ? button.animate(
+            [
+              {
+                transform: "translate3d(0px, 0px, 0px) scale(1)",
+                boxShadow: "2px 2px 0 rgba(0, 0, 0, 0.34)",
+                filter: "brightness(1) saturate(1)",
+              },
+              {
+                transform: `translate3d(0px, ${(1.8 + nextIntensity * 0.5).toFixed(2)}px, 0px) scale(${pressScaleX.toFixed(3)}, ${pressScaleY.toFixed(3)}) rotate(${(
+                  rotationDirection * 0.22 * nextIntensity
+                ).toFixed(3)}deg)`,
+                boxShadow: `0 1px 0 rgba(0, 0, 0, 0.28), 0 0 ${(
+                  16 + nextIntensity * 4
+                ).toFixed(1)}px ${borderColor}`,
+                filter: `brightness(${(1.16 + nextIntensity * 0.045).toFixed(3)}) saturate(${(
+                  1.12 + nextIntensity * 0.035
+                ).toFixed(3)})`,
+                offset: 0.22,
+              },
+              {
+                transform: `translate3d(${driftX.toFixed(2)}px, ${(
+                  -1.4 + driftY
+                ).toFixed(2)}px, 0px) scale(${bounceScaleX.toFixed(3)}, ${bounceScaleY.toFixed(
+                  3,
+                )}) rotate(${peakRotation.toFixed(3)}deg)`,
+                boxShadow: `0 4px 14px rgba(0, 0, 0, 0.22), 0 0 ${(
+                  18 + nextIntensity * 5.5
+                ).toFixed(1)}px ${glowColor}`,
+                filter: `brightness(${(1.12 + nextIntensity * 0.03).toFixed(3)}) saturate(${(
+                  1.08 + nextIntensity * 0.028
+                ).toFixed(3)})`,
+                offset: 0.56,
+              },
+              {
+                transform: `translate3d(${settleX.toFixed(2)}px, ${settleY.toFixed(
+                  2,
+                )}px, 0px) scale(${(0.996 + nextIntensity * 0.002).toFixed(3)}, ${(
+                  0.988 + nextIntensity * 0.0018
+                ).toFixed(3)}) rotate(${settleRotation.toFixed(3)}deg)`,
+                boxShadow: `1px 2px 0 rgba(0, 0, 0, 0.24), 0 0 ${(
+                  11 + nextIntensity * 2.5
+                ).toFixed(1)}px ${borderColor}`,
+                filter: `brightness(${(1.03 + nextIntensity * 0.014).toFixed(3)}) saturate(${(
+                  1.01 + nextIntensity * 0.01
+                ).toFixed(3)})`,
+                offset: 0.78,
+              },
+              {
+                transform: "translate3d(0px, 0px, 0px) scale(1)",
+                boxShadow: "2px 2px 0 rgba(0, 0, 0, 0.34)",
+                filter: "brightness(1) saturate(1)",
+              },
+            ],
+            {
+              duration: Math.round(
+                SPACEBAR_PRESS_ANIMATION_BASE_MS +
+                  Math.floor(Math.random() * 90) +
+                  nextIntensity * 32,
+              ),
+              easing: "cubic-bezier(0.18, 0.82, 0.22, 1)",
+            },
+          )
+        : button.animate(
+            [
+              {
+                transform: "translate3d(0px, 0px, 0px) scale(1)",
+                boxShadow: "2px 2px 0 rgba(0, 0, 0, 0.34)",
+                filter: "brightness(1) saturate(1)",
+              },
+              {
+                transform: `translate3d(0px, ${(1.6 + nextIntensity * 0.44).toFixed(
+                  2,
+                )}px, 0px) scale(${pressScaleX.toFixed(3)}, ${pressScaleY.toFixed(
+                  3,
+                )}) rotate(${(rotationDirection * 0.18 * nextIntensity).toFixed(3)}deg)`,
+                boxShadow: `0 1px 0 rgba(0, 0, 0, 0.28), 0 0 ${(
+                  12 + nextIntensity * 3.8
+                ).toFixed(1)}px ${borderColor}`,
+                filter: `brightness(${(1.12 + nextIntensity * 0.04).toFixed(3)}) saturate(${(
+                  1.08 + nextIntensity * 0.03
+                ).toFixed(3)})`,
+                offset: 0.28,
+              },
+              {
+                transform: `translate3d(${(driftX * 0.84).toFixed(2)}px, ${(
+                  -1 + driftY * 0.78
+                ).toFixed(2)}px, 0px) scale(${(1.01 + nextIntensity * 0.005).toFixed(
+                  3,
+                )}, ${(1.012 + nextIntensity * 0.0055).toFixed(3)}) rotate(${(
+                  peakRotation * 0.72
+                ).toFixed(3)}deg)`,
+                boxShadow: `0 3px 10px rgba(0, 0, 0, 0.2), 0 0 ${(
+                  11 + nextIntensity * 4
+                ).toFixed(1)}px ${glowColor}`,
+                filter: `brightness(${(1.05 + nextIntensity * 0.02).toFixed(3)}) saturate(${(
+                  1.03 + nextIntensity * 0.018
+                ).toFixed(3)})`,
+                offset: 0.62,
+              },
+              {
+                transform: `translate3d(${(settleX * 0.72).toFixed(2)}px, ${(
+                  0.8 + settleY * 0.32
+                ).toFixed(2)}px, 0px) scale(${(0.998 + nextIntensity * 0.0015).toFixed(
+                  3,
+                )}, ${(0.995 + nextIntensity * 0.0018).toFixed(3)}) rotate(${(
+                  settleRotation * 0.8
+                ).toFixed(3)}deg)`,
+                boxShadow: `1px 2px 0 rgba(0, 0, 0, 0.24), 0 0 ${(
+                  9 + nextIntensity * 2.4
+                ).toFixed(1)}px ${borderColor}`,
+                filter: `brightness(${(1.02 + nextIntensity * 0.01).toFixed(3)}) saturate(${(
+                  1.01 + nextIntensity * 0.008
+                ).toFixed(3)})`,
+                offset: 0.82,
+              },
+              {
+                transform: "translate3d(0px, 0px, 0px) scale(1)",
+                boxShadow: "2px 2px 0 rgba(0, 0, 0, 0.34)",
+                filter: "brightness(1) saturate(1)",
+              },
+            ],
+            {
+              duration: Math.round(
+                KEYBOARD_BUTTON_PRESS_ANIMATION_MS + nextIntensity * 28,
+              ),
+              easing: "cubic-bezier(0.2, 0.88, 0.24, 1)",
+            },
+          )
+      : button.animate(
+          [
+            {
+              transform: "translate(1px, 1px)",
+              boxShadow: "1px 1px 0 rgba(73, 44, 53, 0.28)",
+            },
+            {
+              transform: "translate(0px, 0px)",
+              boxShadow: "2px 2px 0 rgba(73, 44, 53, 0.24)",
+            },
+          ],
+          {
+            duration: BUTTON_PRESS_ANIMATION_MS,
+            easing: BUTTON_PRESS_EASING,
+          },
+        );
 
     pressAnimationByButton.set(button, animation);
     animation.addEventListener("finish", () => {
