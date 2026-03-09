@@ -7,6 +7,8 @@ export const initialAppState: AppState = {
   filteredSamples: [],
   selectedSampleId: null,
   slotCounter: 1,
+  activeSlotAssignedCount: 0,
+  activeSlotRangeStart: 1,
   randomizerStepRatio: 0.75,
   loopEnabled: false,
   autoplayEnabled: false,

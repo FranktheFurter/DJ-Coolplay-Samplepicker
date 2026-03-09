@@ -6,6 +6,7 @@ import {
   replaceSamplesForDirectory,
   saveDirectory,
   updateSampleSlotNumber,
+  updateSampleSlotNumbers,
 } from "./db";
 import {
   createPersistedDirectory,
@@ -19,6 +20,7 @@ import { createAppStore, initialAppState } from "./state";
 import "./styles.css";
 import type {
   AppState,
+  ExportAssignmentsRequest,
   PersistedDirectory,
   RandomizerRequest,
   SampleRecord,
@@ -37,6 +39,7 @@ let lastSelectedSampleId: string | null = null;
 const MIN_SLOT_NUMBER = 1;
 const MAX_SLOT_NUMBER = 999;
 const RANDOMIZER_SLOTS_PER_CATEGORY = 50;
+const EXPORT_FOLDER_PREFIX = "sample-picker-export";
 
 function clampRandomizerStepRatio(stepRatio: number): number {
   if (!Number.isFinite(stepRatio)) {
@@ -46,9 +49,17 @@ function clampRandomizerStepRatio(stepRatio: number): number {
   return Math.max(0, Math.min(1, stepRatio));
 }
 
-function escapeCsvField(value: string): string {
-  const escaped = value.replaceAll('"', '""');
-  return `"${escaped}"`;
+function sanitizeFileSystemName(value: string): string {
+  return value
+    .trim()
+    .replace(/[<>:"/\\|?*\u0000-\u001F]/g, "-")
+    .replace(/\s+/g, " ")
+    .replace(/[. ]+$/g, "")
+    .slice(0, 80);
+}
+
+function padSlotNumber(slotNumber: number): string {
+  return String(slotNumber).padStart(3, "0");
 }
 
 function toRandomInt(maxExclusive: number): number {
@@ -106,15 +117,14 @@ function clampSlotCounter(slotNumber: number): number {
   return Math.min(MAX_SLOT_NUMBER, Math.max(MIN_SLOT_NUMBER, Math.round(slotNumber)));
 }
 
-function getNextSlotInRange(
+function getAssignedSlotsInRange(
   samples: SampleRecord[],
   rangeStart: number,
   rangeEnd: number,
-): number {
+): { assignedSlots: Set<number>; start: number; end: number } {
   const start = clampSlotCounter(Math.min(rangeStart, rangeEnd));
   const end = clampSlotCounter(Math.max(rangeStart, rangeEnd));
   const assignedInRange = new Set<number>();
-  let highestAssigned = start - 1;
 
   for (const sample of samples) {
     if (sample.slotNumber === null) {
@@ -126,22 +136,123 @@ function getNextSlotInRange(
     }
 
     assignedInRange.add(sample.slotNumber);
-    highestAssigned = Math.max(highestAssigned, sample.slotNumber);
   }
 
-  const nextAfterHighest = highestAssigned + 1;
+  return {
+    assignedSlots: assignedInRange,
+    start,
+    end,
+  };
+}
 
-  if (nextAfterHighest <= end && !assignedInRange.has(nextAfterHighest)) {
-    return nextAfterHighest;
-  }
-
+function findFirstFreeSlot(
+  assignedSlots: Set<number>,
+  start: number,
+  end: number,
+): number | null {
   for (let slotNumber = start; slotNumber <= end; slotNumber += 1) {
-    if (!assignedInRange.has(slotNumber)) {
+    if (!assignedSlots.has(slotNumber)) {
       return slotNumber;
     }
   }
 
-  return end;
+  return null;
+}
+
+function getFirstFreeSlotInRange(
+  samples: SampleRecord[],
+  rangeStart: number,
+  rangeEnd: number,
+): number | null {
+  const { assignedSlots, start, end } = getAssignedSlotsInRange(
+    samples,
+    rangeStart,
+    rangeEnd,
+  );
+
+  return findFirstFreeSlot(assignedSlots, start, end);
+}
+
+function getSlotCategoryRange(slotNumber: number): { start: number; end: number } {
+  const clampedSlotNumber = clampSlotCounter(slotNumber);
+
+  if (clampedSlotNumber <= 99) {
+    return { start: 1, end: 99 };
+  }
+
+  const start = Math.floor(clampedSlotNumber / 100) * 100;
+
+  return {
+    start,
+    end: Math.min(MAX_SLOT_NUMBER, start + 99),
+  };
+}
+
+function normalizeActiveSlotRangeStart(slotNumber: number): number {
+  return getSlotCategoryRange(slotNumber).start;
+}
+
+function getActiveSlotMetrics(
+  samples: SampleRecord[],
+  activeSlotRangeStart: number,
+): { rangeStart: number; rangeEnd: number; assignedCount: number; nextFreeSlot: number | null } {
+  const { start: categoryRangeStart, end: categoryRangeEnd } =
+    getSlotCategoryRange(activeSlotRangeStart);
+  const { assignedSlots, start, end } = getAssignedSlotsInRange(
+    samples,
+    categoryRangeStart,
+    categoryRangeEnd,
+  );
+
+  return {
+    rangeStart: start,
+    rangeEnd: end,
+    assignedCount: assignedSlots.size,
+    nextFreeSlot: findFirstFreeSlot(assignedSlots, start, end),
+  };
+}
+
+function removeSampleSlotAndCompact(
+  samples: SampleRecord[],
+  sampleId: string,
+): {
+  nextSamples: SampleRecord[];
+  activeSlotRangeStart: number;
+  updates: Array<{ sampleId: string; slotNumber: number | null }>;
+} | null {
+  const sample = samples.find((entry) => entry.id === sampleId);
+
+  if (!sample || sample.slotNumber === null) {
+    return null;
+  }
+
+  const removedSlotNumber = sample.slotNumber;
+  const { start, end } = getSlotCategoryRange(removedSlotNumber);
+  const updates: Array<{ sampleId: string; slotNumber: number | null }> = [];
+  const nextSamples = samples.map((entry) => {
+    if (entry.slotNumber === null || entry.slotNumber < start || entry.slotNumber > end) {
+      return entry;
+    }
+
+    if (entry.id === sampleId) {
+      updates.push({ sampleId: entry.id, slotNumber: null });
+      return { ...entry, slotNumber: null };
+    }
+
+    if (entry.slotNumber > removedSlotNumber) {
+      const slotNumber = entry.slotNumber - 1;
+      updates.push({ sampleId: entry.id, slotNumber });
+      return { ...entry, slotNumber };
+    }
+
+    return entry;
+  });
+
+  return {
+    nextSamples,
+    activeSlotRangeStart: start,
+    updates,
+  };
 }
 
 function deriveState(nextState: AppState): AppState {
@@ -170,10 +281,21 @@ function deriveState(nextState: AppState): AppState {
     selectedSampleId = filteredSamples[0].id;
   }
 
+  const activeSlotRangeStart = normalizeActiveSlotRangeStart(
+    nextState.activeSlotRangeStart,
+  );
+  const activeSlotMetrics = getActiveSlotMetrics(
+    nextState.samples,
+    activeSlotRangeStart,
+  );
+
   return {
     ...nextState,
     filteredSamples,
     selectedSampleId,
+    slotCounter: activeSlotMetrics.nextFreeSlot,
+    activeSlotAssignedCount: activeSlotMetrics.assignedCount,
+    activeSlotRangeStart,
   };
 }
 
@@ -186,10 +308,11 @@ function commitState(patch: Partial<AppState>): void {
   store.setState(nextState);
 }
 
-async function ensureReadPermission(
+async function ensureDirectoryPermission(
   handle: FileSystemDirectoryHandle,
+  mode: "read" | "readwrite" = "read",
 ): Promise<boolean> {
-  const options = { mode: "read" } as const;
+  const options = { mode } as const;
   const currentPermission = await handle.queryPermission(options);
 
   if (currentPermission === "granted") {
@@ -197,6 +320,12 @@ async function ensureReadPermission(
   }
 
   return (await handle.requestPermission(options)) === "granted";
+}
+
+async function ensureReadPermission(
+  handle: FileSystemDirectoryHandle,
+): Promise<boolean> {
+  return ensureDirectoryPermission(handle, "read");
 }
 
 function buildSlotMap(samples: SampleRecord[]): Map<string, number> {
@@ -443,7 +572,6 @@ async function handleResetAssignments(): Promise<void> {
 
   commitState({
     samples: nextSamples,
-    slotCounter: MIN_SLOT_NUMBER,
     error: null,
   });
 
@@ -452,7 +580,6 @@ async function handleResetAssignments(): Promise<void> {
   } catch (error) {
     commitState({
       samples: previousState.samples,
-      slotCounter: previousState.slotCounter,
       error:
         error instanceof Error
           ? error.message
@@ -461,7 +588,61 @@ async function handleResetAssignments(): Promise<void> {
   }
 }
 
-function handleExportAssignments(): void {
+function buildExportFolderName(
+  label: string,
+  rangeStart: number,
+  rangeEnd: number,
+): string {
+  const sanitizedLabel = sanitizeFileSystemName(label);
+
+  if (sanitizedLabel.length > 0) {
+    return sanitizedLabel;
+  }
+
+  return `Slots ${padSlotNumber(rangeStart)}-${padSlotNumber(rangeEnd)}`;
+}
+
+function resolveExportCategoryLabel(
+  slotNumber: number,
+  request: ExportAssignmentsRequest,
+): string {
+  for (const category of request.categories) {
+    const rangeStart = Math.min(category.rangeStart, category.rangeEnd);
+    const rangeEnd = Math.max(category.rangeStart, category.rangeEnd);
+
+    if (slotNumber >= rangeStart && slotNumber <= rangeEnd) {
+      return buildExportFolderName(category.label, rangeStart, rangeEnd);
+    }
+  }
+
+  return "Unsorted";
+}
+
+async function writeExportFile(
+  exportRootHandle: FileSystemDirectoryHandle,
+  folderName: string,
+  slotNumber: number,
+  file: File,
+): Promise<void> {
+  const folderHandle = await exportRootHandle.getDirectoryHandle(folderName, {
+    create: true,
+  });
+  const baseFileName = file.name.toLowerCase().endsWith(".wav")
+    ? file.name.slice(0, -4)
+    : file.name;
+  const sanitizedBaseName = sanitizeFileSystemName(baseFileName) || "sample";
+  const exportFileHandle = await folderHandle.getFileHandle(
+    `${padSlotNumber(slotNumber)} - ${sanitizedBaseName}.wav`,
+    { create: true },
+  );
+  const writable = await exportFileHandle.createWritable();
+  await writable.write(file);
+  await writable.close();
+}
+
+async function handleExportAssignments(
+  request: ExportAssignmentsRequest,
+): Promise<void> {
   const state = store.getState();
   const assignedSamples = [...state.samples]
     .filter((sample) => sample.slotNumber !== null)
@@ -480,32 +661,65 @@ function handleExportAssignments(): void {
     return;
   }
 
-  const rows = assignedSamples.map((sample) =>
-    [String(sample.slotNumber ?? ""), sample.name, sample.relativePath]
-      .map(escapeCsvField)
-      .join(","),
-  );
-  const csv = [
-    ["slotNumber", "sampleName", "relativePath"]
-      .map(escapeCsvField)
-      .join(","),
-    ...rows,
-  ].join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-  const objectUrl = URL.createObjectURL(blob);
-  const timestamp = new Date()
-    .toISOString()
-    .replaceAll(":", "-")
-    .replaceAll(".", "-");
-  const link = document.createElement("a");
-  link.href = objectUrl;
-  link.download = `sample-picker-export-${timestamp}.csv`;
-  link.style.display = "none";
-  document.body.append(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(objectUrl);
-  commitState({ error: null });
+  if (!activeDirectory) {
+    commitState({ error: "Kein Sample-Ordner fuer Export aktiv." });
+    return;
+  }
+
+  try {
+    const hasReadPermission = await ensureReadPermission(activeDirectory.handle);
+
+    if (!hasReadPermission) {
+      throw new Error("Leseberechtigung fuer den Sample-Ordner wurde verweigert.");
+    }
+
+    const destinationHandle = await window.showDirectoryPicker();
+    const hasWritePermission = await ensureDirectoryPermission(
+      destinationHandle,
+      "readwrite",
+    );
+
+    if (!hasWritePermission) {
+      throw new Error("Schreibberechtigung fuer den Export-Ordner wurde verweigert.");
+    }
+
+    const exportFolderHandle = await destinationHandle.getDirectoryHandle(
+      `${EXPORT_FOLDER_PREFIX}-${new Date()
+        .toISOString()
+        .replaceAll(":", "-")
+        .replaceAll(".", "-")}`,
+      { create: true },
+    );
+    for (const sample of assignedSamples) {
+      const slotNumber = sample.slotNumber;
+
+      if (slotNumber === null) {
+        continue;
+      }
+
+      const folderName = resolveExportCategoryLabel(slotNumber, request);
+      const file = await getFileFromRelativePath(
+        activeDirectory.handle,
+        sample.relativePath,
+      );
+      await writeExportFile(exportFolderHandle, folderName, slotNumber, file);
+    }
+
+    commitState({
+      error: `Export abgeschlossen: ${assignedSamples.length} Samples wurden als WAV in den Zielordner geschrieben.`,
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      return;
+    }
+
+    commitState({
+      error:
+        error instanceof Error
+          ? error.message
+          : "Ordner-Export fehlgeschlagen.",
+    });
+  }
 }
 
 function handleRandomizerStepRatioChange(stepRatio: number): void {
@@ -593,7 +807,6 @@ async function handleRunRandomizer(request: RandomizerRequest): Promise<void> {
   commitState({
     samples: baseSamples,
     randomizerStepRatio: stepRatio,
-    slotCounter: MIN_SLOT_NUMBER,
     error: null,
   });
 
@@ -603,7 +816,6 @@ async function handleRunRandomizer(request: RandomizerRequest): Promise<void> {
     commitState({
       samples: previousState.samples,
       randomizerStepRatio: previousState.randomizerStepRatio,
-      slotCounter: previousState.slotCounter,
       error:
         error instanceof Error
           ? error.message
@@ -617,46 +829,18 @@ function handleSearchChange(query: string): void {
 }
 
 function handleAssignedOnlyChange(showAssignedOnly: boolean): void {
-  commitState({ showAssignedOnly });
-
-  if (!showAssignedOnly) {
-    return;
-  }
-
-  const nextState = store.getState();
-  const selectedSample =
-    nextState.selectedSampleId === null
-      ? null
-      : nextState.samples.find((sample) => sample.id === nextState.selectedSampleId) ??
-        null;
-  const selectedSlotNumber = selectedSample?.slotNumber ?? null;
-
-  if (selectedSlotNumber !== null && nextState.slotCounter !== selectedSlotNumber) {
-    commitState({ slotCounter: selectedSlotNumber });
-  }
-}
-
-function handleSlotCounterChange(slotNumber: number): void {
-  commitState({ slotCounter: clampSlotCounter(slotNumber) });
-}
-
-function handleSlotCounterAdjust(delta: number): void {
-  if (!Number.isFinite(delta) || delta === 0) {
-    return;
-  }
-
-  const step = delta > 0 ? 1 : -1;
-  const currentCounter = store.getState().slotCounter;
-  handleSlotCounterChange(currentCounter + step);
+  commitState({
+    showAssignedOnly,
+    query: showAssignedOnly ? "" : store.getState().query,
+  });
 }
 
 function handleSlotCategoryActivate(rangeStart: number, rangeEnd: number): void {
-  const slotCounter = getNextSlotInRange(
-    store.getState().samples,
-    rangeStart,
-    rangeEnd,
-  );
-  commitState({ slotCounter });
+  commitState({
+    activeSlotRangeStart: normalizeActiveSlotRangeStart(
+      Math.min(rangeStart, rangeEnd),
+    ),
+  });
 }
 
 function handleLoopEnabledChange(loopEnabled: boolean): void {
@@ -676,15 +860,7 @@ function handleSelectSample(sampleId: string): void {
     return;
   }
 
-  const shouldSnapCounterToSelection =
-    state.showAssignedOnly &&
-    targetSample.slotNumber !== null &&
-    state.slotCounter !== targetSample.slotNumber;
-
   if (state.selectedSampleId === sampleId) {
-    if (shouldSnapCounterToSelection && targetSample.slotNumber !== null) {
-      commitState({ slotCounter: targetSample.slotNumber });
-    }
     return;
   }
 
@@ -696,8 +872,10 @@ function handleSelectSample(sampleId: string): void {
     selectedSampleId: sampleId,
   };
 
-  if (shouldSnapCounterToSelection && targetSample.slotNumber !== null) {
-    nextPatch.slotCounter = targetSample.slotNumber;
+  if (state.showAssignedOnly && targetSample.slotNumber !== null) {
+    nextPatch.activeSlotRangeStart = normalizeActiveSlotRangeStart(
+      targetSample.slotNumber,
+    );
   }
 
   commitState(nextPatch);
@@ -792,46 +970,77 @@ function handlePlaybackProgress(
 async function handleWriteSample(sampleId: string): Promise<void> {
   const previousState = store.getState();
   const previousSamples = previousState.samples;
-  const nextSlotNumber = previousState.slotCounter;
   const sample = previousSamples.find((entry) => entry.id === sampleId);
 
   if (!sample) {
     return;
   }
 
-  const conflictingSampleId =
-    previousSamples.find(
-      (entry) => entry.id !== sampleId && entry.slotNumber === nextSlotNumber,
-    )?.id ?? null;
+  const activeSlotMetrics = getActiveSlotMetrics(
+    previousSamples,
+    previousState.activeSlotRangeStart,
+  );
+  const nextSlotNumber = activeSlotMetrics.nextFreeSlot;
+
+  if (nextSlotNumber === null) {
+    commitState({
+      error: "Dieses Segment ist bereits voll belegt.",
+    });
+    return;
+  }
 
   const nextSamples = previousSamples.map((entry) =>
     entry.id === sampleId
       ? { ...entry, slotNumber: nextSlotNumber }
-      : conflictingSampleId !== null && entry.id === conflictingSampleId
-        ? { ...entry, slotNumber: null }
-        : entry,
+      : entry,
   );
 
   commitState({
     samples: nextSamples,
-    slotCounter: clampSlotCounter(nextSlotNumber + 1),
     error: null,
   });
 
   try {
     await updateSampleSlotNumber(sampleId, nextSlotNumber);
-
-    if (conflictingSampleId !== null) {
-      await updateSampleSlotNumber(conflictingSampleId, null);
-    }
   } catch (error) {
     commitState({
       samples: previousSamples,
-      slotCounter: previousState.slotCounter,
       error:
         error instanceof Error
           ? error.message
           : "Konnte Slot-Zuweisung nicht speichern.",
+    });
+  }
+}
+
+async function handleRemoveSample(sampleId: string): Promise<void> {
+  const previousState = store.getState();
+
+  if (!previousState.currentDirectoryId) {
+    return;
+  }
+
+  const removal = removeSampleSlotAndCompact(previousState.samples, sampleId);
+
+  if (!removal) {
+    return;
+  }
+
+  commitState({
+    samples: removal.nextSamples,
+    activeSlotRangeStart: removal.activeSlotRangeStart,
+    error: null,
+  });
+
+  try {
+    await updateSampleSlotNumbers(removal.updates);
+  } catch (error) {
+    commitState({
+      samples: previousState.samples,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Konnte Slot-Zuweisung nicht entfernen.",
     });
   }
 }
@@ -844,6 +1053,16 @@ async function handleWriteSelectedSample(): Promise<void> {
   }
 
   await handleWriteSample(selectedSampleId);
+}
+
+async function handleRemoveSelectedSample(): Promise<void> {
+  const selectedSampleId = store.getState().selectedSampleId;
+
+  if (!selectedSampleId) {
+    return;
+  }
+
+  await handleRemoveSample(selectedSampleId);
 }
 
 async function playSample(
@@ -926,7 +1145,7 @@ async function handlePlaySelectedSample(): Promise<void> {
     return;
   }
 
-  await playSample(selectedSampleId, "once");
+  await playSample(selectedSampleId, "toggle");
 }
 
 const appRoot = document.querySelector<HTMLDivElement>("#app");
@@ -947,16 +1166,16 @@ const ui = createUI(appRoot, {
   onSelectNextSample: handleSelectNextSample,
   onPlaySelectedSample: handlePlaySelectedSample,
   onWriteSelectedSample: handleWriteSelectedSample,
+  onRemoveSelectedSample: handleRemoveSelectedSample,
   onSearchChange: handleSearchChange,
   onAssignedOnlyChange: handleAssignedOnlyChange,
-  onSlotCounterChange: handleSlotCounterChange,
-  onSlotCounterAdjust: handleSlotCounterAdjust,
   onSlotCategoryActivate: handleSlotCategoryActivate,
   onLoopEnabledChange: handleLoopEnabledChange,
   onAutoplayEnabledChange: handleAutoplayEnabledChange,
   getPlaybackProgress: handlePlaybackProgress,
   onSelectSample: handleSelectSample,
   onWriteSample: handleWriteSample,
+  onRemoveSample: handleRemoveSample,
   onTogglePlay: handleTogglePlay,
 });
 

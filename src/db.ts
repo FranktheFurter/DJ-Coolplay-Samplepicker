@@ -200,3 +200,42 @@ export async function updateSampleSlotNumber(
 
   await transactionToPromise(writeTransaction);
 }
+
+export async function updateSampleSlotNumbers(
+  updates: Array<{ sampleId: string; slotNumber: number | null }>,
+): Promise<void> {
+  if (updates.length === 0) {
+    return;
+  }
+
+  const database = await openDatabase();
+  const readTransaction = database.transaction(SAMPLES_STORE, "readonly");
+  const readStore = readTransaction.objectStore(SAMPLES_STORE);
+  const samples = await Promise.all(
+    updates.map(async ({ sampleId, slotNumber }) => ({
+      sample:
+        ((await requestToPromise(readStore.get(sampleId))) as
+          | SampleRecord
+          | undefined) ?? null,
+      slotNumber,
+    })),
+  );
+
+  await transactionToPromise(readTransaction);
+
+  const writeTransaction = database.transaction(SAMPLES_STORE, "readwrite");
+  const writeStore = writeTransaction.objectStore(SAMPLES_STORE);
+
+  for (const entry of samples) {
+    if (!entry.sample) {
+      continue;
+    }
+
+    writeStore.put({
+      ...entry.sample,
+      slotNumber: entry.slotNumber,
+    });
+  }
+
+  await transactionToPromise(writeTransaction);
+}

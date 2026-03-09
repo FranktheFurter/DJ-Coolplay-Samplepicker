@@ -38,7 +38,9 @@ export interface AppState {
   samples: SampleRecord[];
   filteredSamples: SampleRecord[];
   selectedSampleId: string | null;
-  slotCounter: number;
+  slotCounter: number | null;
+  activeSlotAssignedCount: number;
+  activeSlotRangeStart: number;
   randomizerStepRatio: number;
   loopEnabled: boolean;
   autoplayEnabled: boolean;
@@ -63,4 +65,14 @@ export interface RandomizerCategoryConfig {
 export interface RandomizerRequest {
   stepRatio: number;
   categories: RandomizerCategoryConfig[];
+}
+
+export interface ExportAssignmentsCategoryConfig {
+  rangeStart: number;
+  rangeEnd: number;
+  label: string;
+}
+
+export interface ExportAssignmentsRequest {
+  categories: ExportAssignmentsCategoryConfig[];
 }

@@ -7,6 +7,7 @@ import {
 } from "./fuzzy";
 import type {
   AppState,
+  ExportAssignmentsRequest,
   RandomizerRequest,
   ScanProgress,
   SampleRecord,
@@ -19,16 +20,15 @@ interface UIHandlers {
   onResetAssignments: () => void | Promise<void>;
   onRunRandomizer: (request: RandomizerRequest) => void | Promise<void>;
   onRandomizerStepRatioChange: (stepRatio: number) => void;
-  onExportAssignments: () => void;
+  onExportAssignments: (request: ExportAssignmentsRequest) => void | Promise<void>;
   onSelectRandomSample: () => string | null;
   onSelectPreviousSample: () => string | null;
   onSelectNextSample: () => string | null;
   onPlaySelectedSample: () => void | Promise<void>;
   onWriteSelectedSample: () => void | Promise<void>;
+  onRemoveSelectedSample: () => void | Promise<void>;
   onSearchChange: (query: string) => void;
   onAssignedOnlyChange: (showAssignedOnly: boolean) => void;
-  onSlotCounterChange: (slotNumber: number) => void;
-  onSlotCounterAdjust: (delta: number) => void;
   onSlotCategoryActivate: (rangeStart: number, rangeEnd: number) => void;
   onLoopEnabledChange: (loopEnabled: boolean) => void;
   onAutoplayEnabledChange: (autoplayEnabled: boolean) => void;
@@ -38,6 +38,7 @@ interface UIHandlers {
   ) => number | null;
   onSelectSample: (sampleId: string) => void;
   onWriteSample: (sampleId: string) => void | Promise<void>;
+  onRemoveSample: (sampleId: string) => void | Promise<void>;
   onTogglePlay: (sampleId: string) => void | Promise<void>;
 }
 
@@ -53,6 +54,7 @@ interface SlotCategoryDefinition {
 }
 
 interface SlotCategoryElements {
+  element: HTMLElement;
   definition: SlotCategoryDefinition;
   input: HTMLInputElement;
   cells: HTMLDivElement[];
@@ -309,14 +311,17 @@ function createRow(
   slotIndicator.textContent =
     sample.slotNumber === null ? "Nr. -" : `Nr. ${sample.slotNumber}`;
 
-  const writeButton = document.createElement("button");
-  writeButton.className = "row-button write-button";
-  writeButton.type = "button";
-  writeButton.dataset.action = "write";
-  writeButton.dataset.id = sample.id;
-  writeButton.textContent = "Write";
+  const assignmentButton = document.createElement("button");
+  const removeAssignment = sample.slotNumber !== null;
+  assignmentButton.className = removeAssignment
+    ? "row-button remove-button"
+    : "row-button write-button";
+  assignmentButton.type = "button";
+  assignmentButton.dataset.action = removeAssignment ? "remove" : "write";
+  assignmentButton.dataset.id = sample.id;
+  assignmentButton.textContent = removeAssignment ? "Remove" : "Write";
 
-  actions.append(playButton, slotIndicator, writeButton);
+  actions.append(playButton, slotIndicator, assignmentButton);
   row.append(name, path, actions);
 
   return row;
@@ -606,14 +611,14 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
                   type="button"
                   class="toolbar-main-button is-play-main"
                   data-role="play-selected"
-                  title="Ausgewaehltes Sample einmal abspielen (S)"
+                  title="Wiedergabe des ausgewaehlten Samples starten oder stoppen (S)"
                 >
                   <span class="toolbar-main-button-icon" aria-hidden="true">
                     <svg viewBox="0 0 24 24" focusable="false">
                       <path class="is-solid" d="M8 6v12l10-6z" />
                     </svg>
                   </span>
-                  <span>Play</span>
+                  <span class="toolbar-main-button-label">Play</span>
                 </button>
                 <button
                   type="button"
@@ -629,21 +634,21 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
                   <span>Next</span>
                 </button>
               </div>
-              <button
-                type="button"
-                class="toolbar-main-button is-write"
-                data-role="write-selected"
-                title="Ausgewaehltes Sample auf den aktuellen Counter schreiben (D)"
-              >
-                <span class="toolbar-main-button-icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" focusable="false">
-                    <path
-                      d="M6 5h9l3 3v11H6zM15 5v4h4M9 14h6M9 17h6M9 11h3"
-                    />
-                  </svg>
-                </span>
-                <span>Write</span>
-              </button>
+                <button
+                  type="button"
+                  class="toolbar-main-button is-write"
+                  data-role="write-selected"
+                  title="Ausgewaehltes Sample auf den naechsten freien Slot im aktiven Segment schreiben (D)"
+                >
+                  <span class="toolbar-main-button-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" focusable="false">
+                      <path
+                        d="M6 5h9l3 3v11H6zM15 5v4h4M9 14h6M9 17h6M9 11h3"
+                      />
+                    </svg>
+                  </span>
+                  <span class="toolbar-main-button-label">Write</span>
+                </button>
               <label class="toolbar-toggle">
                 <input type="checkbox" data-role="autoplay-toggle" />
                 <span>Autoplay</span>
@@ -670,15 +675,11 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
         <div class="slot-panel-layout">
           <div class="slot-categories" data-role="slot-categories"></div>
           <div class="slot-counter-rail" data-role="slot-counter-rail">
-            <input
-              type="number"
-              min="1"
-              max="999"
-              step="1"
-              class="slot-counter-input"
+            <div
+              class="slot-counter-display"
               data-role="slot-counter"
-              aria-label="Writehead Counter"
-            />
+              aria-label="Belegte Slots im aktiven Segment"
+            ></div>
           </div>
         </div>
       </aside>
@@ -773,7 +774,7 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
   const resultsBody = root.querySelector<HTMLDivElement>(
     '[data-role="results-body"]',
   );
-  const slotCounterInput = root.querySelector<HTMLInputElement>(
+  const slotCounterDisplay = root.querySelector<HTMLDivElement>(
     '[data-role="slot-counter"]',
   );
   const slotCounterRail = root.querySelector<HTMLDivElement>(
@@ -781,6 +782,12 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
   );
   const slotCategories = root.querySelector<HTMLDivElement>(
     '[data-role="slot-categories"]',
+  );
+  const playSelectedButtonLabel = playSelectedButton?.querySelector<HTMLSpanElement>(
+    ".toolbar-main-button-label",
+  );
+  const writeSelectedButtonLabel = writeSelectedButton?.querySelector<HTMLSpanElement>(
+    ".toolbar-main-button-label",
   );
 
   if (
@@ -816,9 +823,11 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
     !waveformBaseCanvas ||
     !waveformPlayheadCanvas ||
     !resultsBody ||
-    !slotCounterInput ||
+    !slotCounterDisplay ||
     !slotCounterRail ||
-    !slotCategories
+    !slotCategories ||
+    !playSelectedButtonLabel ||
+    !writeSelectedButtonLabel
   ) {
     throw new Error("UI konnte nicht initialisiert werden.");
   }
@@ -828,8 +837,11 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
   const resultsBodyElement = resultsBody;
   const slotCategoriesElement = slotCategories;
   const slotCounterRailElement = slotCounterRail;
-  const slotCounterInputElement = slotCounterInput;
+  const slotCounterDisplayElement = slotCounterDisplay;
   const searchInputElement = searchInput;
+  const assignedOnlyInputElement = assignedOnlyInput;
+  const playSelectedButtonLabelElement = playSelectedButtonLabel;
+  const writeSelectedButtonLabelElement = writeSelectedButtonLabel;
   const exportAssignmentsButtonElement = exportAssignmentsButton;
   const randomizerRunButtonElement = randomizerRunButton;
   const randomizerRatioRangeInputElement = randomizerRatioRangeInput;
@@ -882,6 +894,16 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
         rangeStart: entry.definition.start,
         rangeEnd: entry.definition.end,
         query: entry.input.value.trim(),
+      })),
+    };
+  }
+
+  function getExportAssignmentsRequest(): ExportAssignmentsRequest {
+    return {
+      categories: slotCategoryElements.map((entry) => ({
+        rangeStart: entry.definition.start,
+        rangeEnd: entry.definition.end,
+        label: entry.input.value.trim(),
       })),
     };
   }
@@ -1000,7 +1022,6 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
     lastVirtualTotalCount = totalCount;
     lastVirtualSelectedSampleId = virtualSelectedSampleId;
     lastVirtualCurrentAudioId = virtualCurrentAudioId;
-
     virtualTopSpacer.style.height = `${startIndex * virtualRowHeight}px`;
     virtualBottomSpacer.style.height = `${Math.max(
       0,
@@ -1279,11 +1300,14 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
         }
 
         pendingCategoryFirstResultScroll = true;
-        triggerSearch(inputElement.value);
+        if (!assignedOnlyInputElement.checked) {
+          triggerSearch(inputElement.value);
+        }
         handlers.onSlotCategoryActivate(definition.start, definition.end);
       });
       fragment.append(categoryElement);
       slotCategoryElements.push({
+        element: categoryElement,
         definition,
         input: inputElement,
         cells,
@@ -1302,32 +1326,35 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
       }
     }
 
-    const selectedSlotNumber =
-      state.samples.find((sample) => sample.id === state.selectedSampleId)
-        ?.slotNumber ?? null;
-
     for (const category of slotCategoryElements) {
+      category.element.classList.toggle(
+        "is-active",
+        category.definition.start === state.activeSlotRangeStart,
+      );
+
       for (const cell of category.cells) {
         const slotNumber = Number.parseInt(cell.dataset.slotNumber ?? "", 10);
 
         if (!Number.isInteger(slotNumber)) {
-          cell.classList.remove("is-assigned", "is-selected", "is-counter");
+          cell.classList.remove("is-assigned", "is-counter");
           continue;
         }
 
         cell.classList.toggle("is-assigned", assignedSlots.has(slotNumber));
-        cell.classList.toggle("is-selected", selectedSlotNumber === slotNumber);
-        cell.classList.toggle("is-counter", state.slotCounter === slotNumber);
+        cell.classList.toggle(
+          "is-counter",
+          state.slotCounter !== null && state.slotCounter === slotNumber,
+        );
       }
     }
   }
 
   function syncSlotCounterPosition(): void {
     const railRect = slotCounterRailElement.getBoundingClientRect();
-    const inputHeight = slotCounterInputElement.offsetHeight;
+    const displayHeight = slotCounterDisplayElement.offsetHeight;
 
-    if (inputHeight <= 0 || railRect.height <= 0) {
-      slotCounterInputElement.style.setProperty("--slot-counter-offset", "0px");
+    if (displayHeight <= 0 || railRect.height <= 0) {
+      slotCounterDisplayElement.style.setProperty("--slot-counter-offset", "0px");
       return;
     }
 
@@ -1335,22 +1362,25 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
       ".slot-pixel.is-counter",
     );
     const fallbackCategory = slotCategoriesElement.querySelector<HTMLElement>(
+      ".slot-category.is-active",
+    );
+    const defaultCategory = slotCategoriesElement.querySelector<HTMLElement>(
       ".slot-category",
     );
-    const targetElement = activePixel ?? fallbackCategory;
+    const targetElement = activePixel ?? fallbackCategory ?? defaultCategory;
 
     if (!targetElement) {
-      slotCounterInputElement.style.setProperty("--slot-counter-offset", "0px");
+      slotCounterDisplayElement.style.setProperty("--slot-counter-offset", "0px");
       return;
     }
 
     const targetRect = targetElement.getBoundingClientRect();
     const unclampedOffset =
-      targetRect.top - railRect.top + targetRect.height / 2 - inputHeight / 2;
-    const maxOffset = Math.max(0, railRect.height - inputHeight);
+      targetRect.top - railRect.top + targetRect.height / 2 - displayHeight / 2;
+    const maxOffset = Math.max(0, railRect.height - displayHeight);
     const clampedOffset = Math.max(0, Math.min(maxOffset, unclampedOffset));
 
-    slotCounterInputElement.style.setProperty(
+    slotCounterDisplayElement.style.setProperty(
       "--slot-counter-offset",
       `${Math.round(clampedOffset)}px`,
     );
@@ -1365,7 +1395,7 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
   });
 
   exportAssignmentsButtonElement.addEventListener("click", () => {
-    handlers.onExportAssignments();
+    void handlers.onExportAssignments(getExportAssignmentsRequest());
   });
 
   refreshScanButton.addEventListener("click", () => {
@@ -1430,6 +1460,11 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
 
   writeSelectedButton.addEventListener("click", () => {
     animateButtonPress(writeSelectedButton);
+    if (writeSelectedButton.dataset.mode === "remove") {
+      void handlers.onRemoveSelectedSample();
+      return;
+    }
+
     void handlers.onWriteSelectedSample();
   });
 
@@ -1446,31 +1481,6 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
   assignedOnlyInput.addEventListener("change", (event) => {
     const target = event.currentTarget as HTMLInputElement;
     handlers.onAssignedOnlyChange(target.checked);
-  });
-
-  slotCounterInputElement.addEventListener(
-    "wheel",
-    (event) => {
-      event.preventDefault();
-
-      if (event.deltaY === 0) {
-        return;
-      }
-
-      handlers.onSlotCounterAdjust(event.deltaY > 0 ? 1 : -1);
-    },
-    { passive: false },
-  );
-
-  slotCounterInputElement.addEventListener("input", (event) => {
-    const target = event.currentTarget as HTMLInputElement;
-    const parsed = Number.parseInt(target.value, 10);
-
-    if (!Number.isInteger(parsed)) {
-      return;
-    }
-
-    handlers.onSlotCounterChange(parsed);
   });
 
   loopToggleInput.addEventListener("change", (event) => {
@@ -1553,6 +1563,11 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
 
       if (action === "write") {
         void handlers.onWriteSample(sampleId);
+        return;
+      }
+
+      if (action === "remove") {
+        void handlers.onRemoveSample(sampleId);
       }
 
       return;
@@ -1608,11 +1623,30 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
         !state.isScanning &&
         state.currentDirectoryId !== null &&
         selectedSample !== null;
+      const selectedSampleIsPlaying =
+        selectedSample !== null && state.currentAudioId === selectedSample.id;
+      const removeSelectedAssignment = selectedSample?.slotNumber !== null;
       playSelectedButton.disabled =
         !canUseSelectedSampleActions ||
         selectedSample === null ||
         !isBrowserAudioExtensionSupported(selectedSample.extension);
+      playSelectedButton.classList.toggle("is-active-play", selectedSampleIsPlaying);
+      playSelectedButtonLabelElement.textContent = selectedSampleIsPlaying
+        ? "Stop"
+        : "Play";
+      playSelectedButton.title = selectedSampleIsPlaying
+        ? "Wiedergabe des ausgewaehlten Samples stoppen (S)"
+        : "Wiedergabe des ausgewaehlten Samples starten oder stoppen (S)";
       writeSelectedButton.disabled = !canUseSelectedSampleActions;
+      writeSelectedButton.dataset.mode = removeSelectedAssignment ? "remove" : "write";
+      writeSelectedButton.classList.toggle("is-write", !removeSelectedAssignment);
+      writeSelectedButton.classList.toggle("is-remove", removeSelectedAssignment);
+      writeSelectedButtonLabelElement.textContent = removeSelectedAssignment
+        ? "Remove"
+        : "Write";
+      writeSelectedButton.title = removeSelectedAssignment
+        ? "Zuweisung des ausgewaehlten Samples entfernen und Segment lueckenlos nachruecken."
+        : "Ausgewaehltes Sample auf den naechsten freien Slot im aktiven Segment schreiben.";
 
       const assignedOnlyModeActive = state.showAssignedOnly;
       const effectiveNormalizedQuery = assignedOnlyModeActive
@@ -1630,9 +1664,9 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
       searchInput.title = assignedOnlyModeActive
         ? "Suchfilter pausiert, solange nur zugewiesene Samples angezeigt werden."
         : "";
-      assignedOnlyInput.checked = state.showAssignedOnly;
+      assignedOnlyInputElement.checked = state.showAssignedOnly;
       syncRandomizerRatioInputs(state.randomizerStepRatio * 100);
-      slotCounterInputElement.value = String(state.slotCounter);
+      slotCounterDisplayElement.textContent = String(state.activeSlotAssignedCount);
       loopToggleInput.checked = state.loopEnabled;
       autoplayToggleInput.checked = state.autoplayEnabled;
 
