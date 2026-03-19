@@ -257,7 +257,7 @@ export async function getFileFromRelativePath(
   const segments = relativePath.split("/").filter(Boolean);
 
   if (segments.length === 0) {
-    throw new Error("Leerer Dateipfad.");
+    throw new Error("Empty file path.");
   }
 
   let currentDirectory = rootHandle;

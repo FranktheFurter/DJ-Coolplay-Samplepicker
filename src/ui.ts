@@ -97,7 +97,7 @@ const KEYBOARD_PRESS_DECAY_MS = 700;
 const BUTTON_PRESS_EASING = "cubic-bezier(0.22, 0.61, 0.36, 1)";
 const WAVEFORM_SWAP_ANIMATION_MS = 220;
 const WAVEFORM_SWAP_EASING = "cubic-bezier(0.22, 0.61, 0.36, 1)";
-const ROOT_DIRECTORY_LABEL = "Ordnerwurzel";
+const ROOT_DIRECTORY_LABEL = "Root folder";
 const THEME_STORAGE_KEY = "sample-picker-theme";
 const THEME_OPTIONS = [
   {
@@ -109,7 +109,7 @@ const THEME_OPTIONS = [
   },
   {
     key: "yellow",
-    label: "Gelb",
+    label: "Yellow",
     accent: "#ffd866",
     accentStrong: "#ffe69c",
     contrast: "#ab9df2",
@@ -123,7 +123,7 @@ const THEME_OPTIONS = [
   },
   {
     key: "violet",
-    label: "Violett",
+    label: "Violet",
     accent: "#ab9df2",
     accentStrong: "#d0c8ff",
     contrast: "#a9dc76",
@@ -222,85 +222,86 @@ function getSlotCategoryRangeStart(slotNumber: number): number {
 }
 
 function formatCount(count: number): string {
-  const formattedCount = count.toLocaleString("de-DE");
-  return `${formattedCount} Sample${count === 1 ? "" : "s"}`;
+  const formattedCount = count.toLocaleString("en-US");
+  return `${formattedCount} sample${count === 1 ? "" : "s"}`;
 }
 
 function formatMegabytes(bytes: number): string {
   const megabytes = Math.max(0, bytes) / (1024 * 1024);
-  return `${megabytes.toLocaleString("de-DE", {
+  return `${megabytes.toLocaleString("en-US", {
     minimumFractionDigits: megabytes < 10 ? 1 : 0,
     maximumFractionDigits: 1,
   })} MB`;
 }
 
 function formatProgressCount(current: number, total: number | null): string {
-  const formattedCurrent = current.toLocaleString("de-DE");
+  const formattedCurrent = current.toLocaleString("en-US");
 
   if (total === null) {
-    return `${formattedCurrent} gefunden`;
+    return `${formattedCurrent} found`;
   }
 
-  return `${formattedCurrent} / ${total.toLocaleString("de-DE")}`;
+  return `${formattedCurrent} / ${total.toLocaleString("en-US")}`;
 }
 
 function formatEta(estimatedRemainingMs: number | null): string {
   if (estimatedRemainingMs === null) {
-    return "ETA wird berechnet";
+    return "Calculating ETA";
   }
 
   if (estimatedRemainingMs <= 0) {
-    return "Fast fertig";
+    return "Almost done";
   }
 
   const totalSeconds = Math.max(1, Math.round(estimatedRemainingMs / 1000));
 
   if (totalSeconds < 60) {
-    return `${totalSeconds}s Rest`;
+    return `${totalSeconds}s left`;
   }
 
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = String(totalSeconds % 60).padStart(2, "0");
-  return `${minutes}:${seconds} Rest`;
+  return `${minutes}:${seconds} left`;
 }
 
 function formatScanPhase(progress: ScanProgress): string {
   return progress.phase === "counting"
-    ? "Sample-Library wird gezaehlt"
-    : "Sample-Library wird gescannt";
+    ? "Counting sample library"
+    : "Scanning sample library";
 }
 
 function formatScanDetail(progress: ScanProgress): string {
   if (progress.phase === "counting") {
-    return `${formatProgressCount(progress.discoveredSampleCount, null)} unterstuetzte Samples entdeckt`;
+    return `${formatProgressCount(progress.discoveredSampleCount, null)} supported samples found`;
   }
 
-  return `${formatProgressCount(progress.scannedSampleCount, progress.totalSampleCount)} Samples verarbeitet`;
+  return `${formatProgressCount(progress.scannedSampleCount, progress.totalSampleCount)} samples processed`;
 }
 
 function formatStatus(state: AppState): string {
   if (state.isScanning) {
-    const directoryLabel = state.currentDirectoryName ?? "Ordner";
+    const directoryLabel = state.currentDirectoryName ?? "Folder";
 
     if (!state.scanProgress) {
-      return `Ordner: ${directoryLabel} · Scan laeuft...`;
+      return `Folder: ${directoryLabel} · Scan in progress...`;
     }
 
-    return `Ordner: ${directoryLabel} · ${formatScanPhase(state.scanProgress)}`;
+    return `Folder: ${directoryLabel} · ${formatScanPhase(state.scanProgress)}`;
   }
 
   if (!state.currentDirectoryName) {
-    return "Noch kein Ordner ausgewaehlt.";
+    return "No folder selected yet.";
   }
 
   const lastScan = state.lastScanAt
-    ? `Zuletzt gescannt: ${new Date(state.lastScanAt).toLocaleTimeString("de-DE", {
+    ? `Last scanned: ${new Date(state.lastScanAt).toLocaleTimeString("en-US", {
         hour: "2-digit",
         minute: "2-digit",
+        hour12: false,
       })}`
-    : "Index aus IndexedDB geladen.";
+    : "Index loaded from IndexedDB.";
 
-  return `Ordner: ${state.currentDirectoryName} · ${lastScan}`;
+  return `Folder: ${state.currentDirectoryName} · ${lastScan}`;
 }
 
 function formatDuration(durationSeconds: number): string {
@@ -455,12 +456,12 @@ function createRow(
   playButton.disabled = !isPlayable;
   playButton.title = isPlayable
     ? ""
-    : `Audio-Preview fuer .${sample.extension} wird vom Browser nicht unterstuetzt.`;
+    : `Audio preview for .${sample.extension} is not supported by this browser.`;
 
   const slotIndicator = document.createElement("span");
   slotIndicator.className = "slot-indicator";
   slotIndicator.textContent =
-    sample.slotNumber === null ? "Nr. -" : `Nr. ${sample.slotNumber}`;
+    sample.slotNumber === null ? "Slot -" : `Slot ${sample.slotNumber}`;
 
   const assignmentButton = document.createElement("button");
   const removeAssignment = sample.slotNumber !== null;
@@ -631,7 +632,7 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
         <section class="topbar">
           <div class="headline">
             <div class="headline-brand">
-              <fieldset class="theme-picker" aria-label="Akzentfarbe">
+              <fieldset class="theme-picker" aria-label="Accent color">
                 ${themePickerMarkup}
               </fieldset>
               <h1>CoolPlay SamplePicker</h1>
@@ -656,22 +657,22 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
           <div class="panel">
             <div class="controls">
               <button type="button" class="primary-button" data-role="pick-directory">
-                Ordner auswaehlen
+                Choose folder
               </button>
               <button type="button" class="secondary-button" data-role="refresh-scan">
-                Ordner aktualisieren
+                Refresh folder
               </button>
               <div class="search-wrap">
                 <input
                   type="search"
-                  placeholder="Suche nach Name oder Pfad"
-                  aria-label="Samples durchsuchen"
+                  placeholder="Search by name or path"
+                  aria-label="Search samples"
                   data-role="search"
                 />
               </div>
               <label class="filter-toggle">
                 <input type="checkbox" data-role="assigned-only" />
-                Nur zugewiesene
+                Assigned only
               </label>
             </div>
           </div>
@@ -694,7 +695,7 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
             aria-valuemin="0"
             aria-valuemax="100"
             aria-valuenow="0"
-            aria-label="Scan-Fortschritt"
+            aria-label="Scan progress"
             data-role="scan-progress-track"
           >
             <div class="scan-progress-fill" data-role="scan-progress-fill"></div>
@@ -710,7 +711,7 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
 
         <section class="waveform-panel" data-role="waveform-panel">
           <div class="waveform-meta">
-            <strong data-role="waveform-title">Kein Sample aktiv</strong>
+            <strong data-role="waveform-title">No sample selected</strong>
             <div class="waveform-controls">
               <label class="loop-toggle">
                 <input type="checkbox" data-role="loop-toggle" />
@@ -743,7 +744,7 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
                   type="button"
                   class="toolbar-main-button toolbar-spacebar is-play-main"
                   data-role="play-selected"
-                  title="Wiedergabe des ausgewaehlten Samples starten oder stoppen (Leertaste)"
+                  title="Start or stop playback for the selected sample (Space)"
                 >
                   <span class="toolbar-spacebar-main toolbar-main-button-label">Play</span>
                   <span class="toolbar-spacebar-key">Space</span>
@@ -752,7 +753,7 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
                   type="button"
                   class="toolbar-main-button toolbar-key is-random-key"
                   data-role="random-sample"
-                  title="Zufaelliges Sample aus aktueller Trefferliste auswaehlen (Pfeil links)"
+                  title="Select a random sample from the current results (Left Arrow)"
                 >
                   <span class="toolbar-key-arrow" aria-hidden="true">←</span>
                   <span class="toolbar-key-label">Random</span>
@@ -761,7 +762,7 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
                   type="button"
                   class="toolbar-main-button toolbar-key is-nav is-nav-up"
                   data-role="previous-selected"
-                  title="Vorherigen Eintrag auswaehlen (Pfeil hoch)"
+                  title="Select the previous result (Up Arrow)"
                 >
                   <span class="toolbar-key-arrow" aria-hidden="true">↑</span>
                   <span class="toolbar-key-label">Prev</span>
@@ -770,7 +771,7 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
                   type="button"
                   class="toolbar-main-button toolbar-key is-nav is-nav-down"
                   data-role="next-selected"
-                  title="Naechsten Eintrag auswaehlen (Pfeil runter)"
+                  title="Select the next result (Down Arrow)"
                 >
                   <span class="toolbar-key-arrow" aria-hidden="true">↓</span>
                   <span class="toolbar-key-label">Next</span>
@@ -779,7 +780,7 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
                   type="button"
                   class="toolbar-main-button toolbar-key is-write-key is-write"
                   data-role="write-selected"
-                  title="Ausgewaehltes Sample auf den naechsten freien Slot im aktiven Segment schreiben (Enter)"
+                  title="Assign the selected sample to the next free slot in the active segment (Enter)"
                 >
                   <span class="toolbar-key-arrow" aria-hidden="true">↵</span>
                   <span class="toolbar-key-label toolbar-main-button-label">Write</span>
@@ -789,8 +790,8 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
           </div>
           <div class="results-header">
             <div>Name</div>
-            <div>Pfad</div>
-            <div>Aktionen</div>
+            <div>Path</div>
+            <div>Actions</div>
           </div>
           <div class="results-body" data-role="results-body"></div>
         </section>
@@ -1662,7 +1663,7 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
     }
 
     waveformPanelElement.classList.remove("is-active");
-    waveformTitleElement.textContent = "Kein Sample aktiv";
+    waveformTitleElement.textContent = "No sample selected";
     waveformDurationElement.textContent = "--:--";
   }
 
@@ -1792,7 +1793,7 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
 
   resetAssignmentsButton.addEventListener("click", () => {
     const shouldReset = window.confirm(
-      "Alle Zuweisungen wirklich zuruecksetzen? Dieser Schritt kann nicht rueckgaengig gemacht werden.",
+      "Reset all assignments? This action cannot be undone.",
     );
 
     if (!shouldReset) {
@@ -1995,18 +1996,18 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
         ? "Stop"
         : "Play";
       playSelectedButton.title = selectedSampleIsPlaying
-        ? "Wiedergabe des ausgewaehlten Samples stoppen (Leertaste)"
-        : "Wiedergabe des ausgewaehlten Samples starten oder stoppen (Leertaste)";
+        ? "Stop playback for the selected sample (Space)"
+        : "Start or stop playback for the selected sample (Space)";
       writeSelectedButton.disabled = !canUseSelectedSampleActions;
       writeSelectedButton.dataset.mode = removeSelectedAssignment ? "remove" : "write";
       writeSelectedButton.classList.toggle("is-write", !removeSelectedAssignment);
       writeSelectedButton.classList.toggle("is-remove", removeSelectedAssignment);
       writeSelectedButtonLabelElement.textContent = removeSelectedAssignment
-        ? "Delete"
+        ? "Remove"
         : "Write";
       writeSelectedButton.title = removeSelectedAssignment
-        ? "Zuweisung des ausgewaehlten Samples entfernen und Segment lueckenlos nachruecken (Enter)."
-        : "Ausgewaehltes Sample auf den naechsten freien Slot im aktiven Segment schreiben (Enter).";
+        ? "Remove the selected sample assignment and close the gap in this segment (Enter)."
+        : "Assign the selected sample to the next free slot in the active segment (Enter).";
 
       const assignedOnlyModeActive = state.showAssignedOnly;
       const effectiveNormalizedQuery = assignedOnlyModeActive
@@ -2022,10 +2023,10 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
       searchInput.value = state.query;
       searchInput.disabled = assignedOnlyModeActive;
       searchInput.title = assignedOnlyModeActive
-        ? "Suchfilter pausiert, solange nur zugewiesene Samples angezeigt werden."
+        ? "Search is paused while only assigned samples are shown."
         : "";
       assignedOnlyInputElement.checked = state.showAssignedOnly;
-      assignedSizeElement.textContent = `Belegt ${formatMegabytes(
+      assignedSizeElement.textContent = `Assigned ${formatMegabytes(
         state.samples.reduce(
           (total, sample) => total + (sample.slotNumber !== null ? sample.size : 0),
           0,
@@ -2039,12 +2040,12 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
         state.isScanning && state.scanProgress
           ? state.scanProgress.phase === "counting"
             ? `${state.scanProgress.discoveredSampleCount.toLocaleString(
-                "de-DE",
-              )} Samples gefunden`
+                "en-US",
+              )} samples found`
             : `${formatProgressCount(
                 state.scanProgress.scannedSampleCount,
                 state.scanProgress.totalSampleCount,
-              )} Samples`
+              )} samples`
           : formatCount(state.filteredSamples.length);
 
       if (state.isScanning && state.scanProgress) {
@@ -2151,8 +2152,8 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
         const emptyState = document.createElement("div");
         emptyState.className = "empty-state";
         emptyState.textContent = state.currentDirectoryId
-          ? "Keine passenden Samples gefunden."
-          : "Waehle einen lokalen Sample-Ordner, um den ersten Scan zu starten.";
+          ? "No matching samples found."
+          : "Choose a local sample folder to start the first scan.";
         resultsBodyElement.replaceChildren(emptyState);
         return;
       }

@@ -328,7 +328,7 @@ async function loadWaveformForSelection(sampleId: string | null): Promise<void> 
     const hasPermission = await ensureReadPermission(activeDirectory.handle);
 
     if (!hasPermission) {
-      throw new Error("Leseberechtigung fuer Waveform wurde verweigert.");
+      throw new Error("Read permission for the waveform was denied.");
     }
 
     const file = await getFileFromRelativePath(
@@ -359,7 +359,7 @@ async function loadWaveformForSelection(sampleId: string | null): Promise<void> 
           ? null
           : error instanceof Error
             ? error.message
-            : "Waveform konnte nicht geladen werden.",
+            : "Waveform could not be loaded.",
     });
   }
 }
@@ -390,7 +390,7 @@ async function runScan(directory: PersistedDirectory): Promise<void> {
     const hasPermission = await ensureReadPermission(directory.handle);
 
     if (!hasPermission) {
-      throw new Error("Leseberechtigung fuer den Ordner wurde nicht erteilt.");
+      throw new Error("Read permission for the folder was not granted.");
     }
 
     const previousSamples = filterSupportedSamples(
@@ -445,7 +445,7 @@ async function runScan(directory: PersistedDirectory): Promise<void> {
       error:
         error instanceof Error
           ? error.message
-          : "Unbekannter Fehler beim Scannen.",
+          : "Unknown error while scanning.",
     });
   }
 }
@@ -495,7 +495,7 @@ async function hydrateFromIndexedDb(): Promise<void> {
       error:
         error instanceof Error
           ? error.message
-          : "Konnte gespeicherte Daten nicht laden.",
+          : "Could not load saved data.",
     });
   }
 }
@@ -504,7 +504,7 @@ async function handlePickDirectory(): Promise<void> {
   if (!isFileSystemAccessSupported()) {
     commitState({
       error:
-        "Dieser Browser unterstuetzt die File System Access API nicht ausreichend.",
+        "This browser does not support the File System Access API well enough.",
     });
     return;
   }
@@ -528,7 +528,7 @@ async function handlePickDirectory(): Promise<void> {
       error:
         error instanceof Error
           ? error.message
-          : "Ordnerauswahl fehlgeschlagen.",
+          : "Folder selection failed.",
     });
   }
 }
@@ -570,7 +570,7 @@ async function handleResetAssignments(): Promise<void> {
       error:
         error instanceof Error
           ? error.message
-          : "Konnte Zuweisungen nicht zuruecksetzen.",
+          : "Could not reset assignments.",
     });
   }
 }
@@ -644,12 +644,12 @@ async function handleExportAssignments(
     });
 
   if (assignedSamples.length === 0) {
-    commitState({ error: "Keine Zuweisungen fuer Export vorhanden." });
+    commitState({ error: "No assignments available for export." });
     return;
   }
 
   if (!activeDirectory) {
-    commitState({ error: "Kein Sample-Ordner fuer Export aktiv." });
+    commitState({ error: "No sample folder selected for export." });
     return;
   }
 
@@ -657,7 +657,7 @@ async function handleExportAssignments(
     const hasReadPermission = await ensureReadPermission(activeDirectory.handle);
 
     if (!hasReadPermission) {
-      throw new Error("Leseberechtigung fuer den Sample-Ordner wurde verweigert.");
+      throw new Error("Read permission for the sample folder was denied.");
     }
 
     const destinationHandle = await window.showDirectoryPicker();
@@ -667,7 +667,7 @@ async function handleExportAssignments(
     );
 
     if (!hasWritePermission) {
-      throw new Error("Schreibberechtigung fuer den Export-Ordner wurde verweigert.");
+      throw new Error("Write permission for the export folder was denied.");
     }
 
     const exportFolderHandle = await destinationHandle.getDirectoryHandle(
@@ -693,7 +693,7 @@ async function handleExportAssignments(
     }
 
     commitState({
-      success: `Export abgeschlossen: ${assignedSamples.length} Samples wurden als WAV in den Zielordner geschrieben.`,
+      success: `Export complete: ${assignedSamples.length} samples were written as WAV files to the destination folder.`,
       error: null,
     });
   } catch (error) {
@@ -705,7 +705,7 @@ async function handleExportAssignments(
       error:
         error instanceof Error
           ? error.message
-          : "Ordner-Export fehlgeschlagen.",
+          : "Folder export failed.",
     });
   }
 }
@@ -889,7 +889,7 @@ async function handleWriteSample(sampleId: string): Promise<void> {
 
   if (nextSlotNumber === null) {
     commitState({
-      error: "Dieses Segment ist bereits voll belegt.",
+      error: "This segment is already full.",
     });
     return;
   }
@@ -913,7 +913,7 @@ async function handleWriteSample(sampleId: string): Promise<void> {
       error:
         error instanceof Error
           ? error.message
-          : "Konnte Slot-Zuweisung nicht speichern.",
+          : "Could not save the slot assignment.",
     });
   }
 }
@@ -945,7 +945,7 @@ async function handleRemoveSample(sampleId: string): Promise<void> {
       error:
         error instanceof Error
           ? error.message
-          : "Konnte Slot-Zuweisung nicht entfernen.",
+          : "Could not remove the slot assignment.",
     });
   }
 }
@@ -990,7 +990,7 @@ async function playSample(
     if (mode !== "autoplay") {
       commitState({
         currentAudioId: null,
-        error: `Audio-Preview fuer .${sample.extension} wird von diesem Browser nicht unterstuetzt.`,
+        error: `Audio preview for .${sample.extension} is not supported by this browser.`,
       });
     }
     return;
@@ -1000,7 +1000,7 @@ async function playSample(
     const hasPermission = await ensureReadPermission(activeDirectory.handle);
 
     if (!hasPermission) {
-      throw new Error("Leseberechtigung fuer Audio-Preview wurde verweigert.");
+      throw new Error("Read permission for audio preview was denied.");
     }
 
     if (mode === "once") {
@@ -1031,10 +1031,10 @@ async function playSample(
       currentAudioId: null,
       error:
         isUnsupportedMediaError
-          ? `Audio-Preview fuer "${sample.name}" kann nicht abgespielt werden. Dateiformat oder Codec werden vom Browser nicht unterstuetzt.`
+          ? `Audio preview for "${sample.name}" could not be played. The file format or codec is not supported by this browser.`
           : error instanceof Error
             ? error.message
-            : "Audio-Preview konnte nicht gestartet werden.",
+            : "Audio preview could not be started.",
     });
   }
 }
@@ -1056,7 +1056,7 @@ async function handlePlaySelectedSample(): Promise<void> {
 const appRoot = document.querySelector<HTMLDivElement>("#app");
 
 if (!appRoot) {
-  throw new Error("App-Root #app wurde nicht gefunden.");
+  throw new Error("App root #app was not found.");
 }
 
 const ui = createUI(appRoot, {
@@ -1116,7 +1116,7 @@ if (import.meta.hot) {
 commitState({
   error: isFileSystemAccessSupported()
     ? null
-    : "Chrome oder Edge auf dem Desktop wird fuer diesen MVP benoetigt.",
+    : "Chrome or Edge on desktop is required for this MVP.",
 });
 
 void hydrateFromIndexedDb();

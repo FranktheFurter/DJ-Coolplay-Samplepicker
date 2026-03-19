@@ -1,26 +1,26 @@
 # Sample Picker MVP
 
-![Screenshot der App](output/chrome-mcp/readme-app-preview.png)
+![App screenshot](output/chrome-mcp/readme-app-preview.png)
 
-Kleiner lokaler Prototyp fuer eine browserbasierte Sample-Browsing-App.
+Small local prototype for a browser-based sample browsing app.
 
 ## Setup
 
 1. `npm install`
 2. `npm run dev`
-3. Die angezeigte lokale URL in Chrome oder Edge oeffnen
-4. `Ordner auswaehlen` klicken und den Sample-Ordner freigeben
+3. Open the local URL shown in Chrome or Edge
+4. Click `Choose folder` and grant access to your sample folder
 
-## Hinweise
+## Notes
 
-- Die App nutzt die File System Access API und ist fuer aktuelle Desktop-Versionen von Chrome oder Edge gedacht.
-- Der Index und die gemerkten Samples werden in IndexedDB im Browser gespeichert.
-- `Ordner aktualisieren` scannt den zuletzt ausgewaehlten Ordner erneut.
-- Es werden nur `.wav`-Dateien indexiert.
+- The app uses the File System Access API and is intended for current desktop versions of Chrome or Edge.
+- The index and saved sample assignments are stored in IndexedDB in the browser.
+- `Refresh folder` rescans the most recently selected folder.
+- Only `.wav` files are indexed.
 
 ## GitHub Pages Deployment
 
-- Das Repository ist fuer GitHub Pages per GitHub Action vorbereitet.
-- In GitHub unter `Settings -> Pages` als Quelle `GitHub Actions` auswaehlen.
-- Danach deployed jeder Push auf `main` automatisch die statische Seite.
-- Fuer dieses Repository wird die App unter `https://frankthefurter.github.io/CoolPlay-SamplePicker/` erwartet, solange der Repository-Name gleich bleibt.
+- The repository is prepared for GitHub Pages deployment via GitHub Actions.
+- In GitHub, go to `Settings -> Pages` and choose `GitHub Actions` as the source.
+- After that, every push to `main` will automatically deploy the static site.
+- For this repository, the app is expected at `https://frankthefurter.github.io/CoolPlay-SamplePicker/` as long as the repository name stays the same.
