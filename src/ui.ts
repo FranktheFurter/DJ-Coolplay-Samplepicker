@@ -635,7 +635,7 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
               <fieldset class="theme-picker" aria-label="Accent color">
                 ${themePickerMarkup}
               </fieldset>
-              <h1>CoolPlay SamplePicker</h1>
+              <h1>DJ Coolplay Samplepicker</h1>
             </div>
             <div class="headline-actions">
               <button
