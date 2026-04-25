@@ -40,7 +40,11 @@ let activeScanRunId = 0;
 let directoryContextVersion = 0;
 const MIN_SLOT_NUMBER = 1;
 const MAX_SLOT_NUMBER = 999;
-const EXPORT_FOLDER_PREFIX = "sample-picker-export";
+const EXPORT_FILE_NAME = "Samples - DJ Coolplay Samplepicker.zip";
+const ZIP_LOCAL_FILE_HEADER_SIGNATURE = 0x04034b50;
+const ZIP_CENTRAL_DIRECTORY_SIGNATURE = 0x02014b50;
+const ZIP_END_OF_CENTRAL_DIRECTORY_SIGNATURE = 0x06054b50;
+const ZIP_UTF8_FLAG = 0x0800;
 
 function sanitizeFileSystemName(value: string): string {
   return value
@@ -53,6 +57,77 @@ function sanitizeFileSystemName(value: string): string {
 
 function padSlotNumber(slotNumber: number): string {
   return String(slotNumber).padStart(3, "0");
+}
+
+function createCrc32Table(): Uint32Array {
+  const table = new Uint32Array(256);
+
+  for (let index = 0; index < table.length; index += 1) {
+    let value = index;
+
+    for (let bit = 0; bit < 8; bit += 1) {
+      value = value & 1 ? 0xedb88320 ^ (value >>> 1) : value >>> 1;
+    }
+
+    table[index] = value >>> 0;
+  }
+
+  return table;
+}
+
+const crc32Table = createCrc32Table();
+
+function calculateCrc32(bytes: Uint8Array): number {
+  let crc = 0xffffffff;
+
+  for (const byte of bytes) {
+    crc = crc32Table[(crc ^ byte) & 0xff] ^ (crc >>> 8);
+  }
+
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function createZipDateParts(date: Date): { date: number; time: number } {
+  return {
+    date:
+      ((date.getFullYear() - 1980) << 9) |
+      ((date.getMonth() + 1) << 5) |
+      date.getDate(),
+    time:
+      (date.getHours() << 11) |
+      (date.getMinutes() << 5) |
+      Math.floor(date.getSeconds() / 2),
+  };
+}
+
+function writeUint16(output: number[], value: number): void {
+  output.push(value & 0xff, (value >>> 8) & 0xff);
+}
+
+function writeUint32(output: number[], value: number): void {
+  output.push(
+    value & 0xff,
+    (value >>> 8) & 0xff,
+    (value >>> 16) & 0xff,
+    (value >>> 24) & 0xff,
+  );
+}
+
+function createZipHeaderBytes(values: number[]): Uint8Array {
+  return new Uint8Array(values);
+}
+
+function concatZipParts(parts: Uint8Array[]): Uint8Array {
+  const totalLength = parts.reduce((total, part) => total + part.length, 0);
+  const output = new Uint8Array(totalLength);
+  let offset = 0;
+
+  for (const part of parts) {
+    output.set(part, offset);
+    offset += part.length;
+  }
+
+  return output;
 }
 
 function clampSlotCounter(slotNumber: number): number {
@@ -605,26 +680,113 @@ function resolveExportCategoryLabel(
   return "Unsorted";
 }
 
-async function writeExportFile(
-  exportRootHandle: FileSystemDirectoryHandle,
+interface ZipEntry {
+  data: Uint8Array;
+  path: string;
+}
+
+function buildExportFilePath(
   folderName: string,
   slotNumber: number,
   file: File,
-): Promise<void> {
-  const folderHandle = await exportRootHandle.getDirectoryHandle(folderName, {
-    create: true,
-  });
+): string {
   const baseFileName = file.name.toLowerCase().endsWith(".wav")
     ? file.name.slice(0, -4)
     : file.name;
   const sanitizedBaseName = sanitizeFileSystemName(baseFileName) || "sample";
-  const exportFileHandle = await folderHandle.getFileHandle(
-    `${padSlotNumber(slotNumber)} - ${sanitizedBaseName}.wav`,
-    { create: true },
-  );
-  const writable = await exportFileHandle.createWritable();
-  await writable.write(file);
-  await writable.close();
+
+  return `${folderName}/${padSlotNumber(slotNumber)} - ${sanitizedBaseName}.wav`;
+}
+
+function createZipBlob(entries: ZipEntry[]): Blob {
+  const encoder = new TextEncoder();
+  const zipParts: Uint8Array[] = [];
+  const centralDirectoryParts: Uint8Array[] = [];
+  let offset = 0;
+  const modifiedAt = createZipDateParts(new Date());
+
+  for (const entry of entries) {
+    const nameBytes = encoder.encode(entry.path);
+    const crc32 = calculateCrc32(entry.data);
+    const localHeader: number[] = [];
+    const centralDirectoryHeader: number[] = [];
+
+    writeUint32(localHeader, ZIP_LOCAL_FILE_HEADER_SIGNATURE);
+    writeUint16(localHeader, 20);
+    writeUint16(localHeader, ZIP_UTF8_FLAG);
+    writeUint16(localHeader, 0);
+    writeUint16(localHeader, modifiedAt.time);
+    writeUint16(localHeader, modifiedAt.date);
+    writeUint32(localHeader, crc32);
+    writeUint32(localHeader, entry.data.length);
+    writeUint32(localHeader, entry.data.length);
+    writeUint16(localHeader, nameBytes.length);
+    writeUint16(localHeader, 0);
+
+    const localHeaderBytes = createZipHeaderBytes(localHeader);
+    zipParts.push(localHeaderBytes, nameBytes, entry.data);
+
+    writeUint32(centralDirectoryHeader, ZIP_CENTRAL_DIRECTORY_SIGNATURE);
+    writeUint16(centralDirectoryHeader, 20);
+    writeUint16(centralDirectoryHeader, 20);
+    writeUint16(centralDirectoryHeader, ZIP_UTF8_FLAG);
+    writeUint16(centralDirectoryHeader, 0);
+    writeUint16(centralDirectoryHeader, modifiedAt.time);
+    writeUint16(centralDirectoryHeader, modifiedAt.date);
+    writeUint32(centralDirectoryHeader, crc32);
+    writeUint32(centralDirectoryHeader, entry.data.length);
+    writeUint32(centralDirectoryHeader, entry.data.length);
+    writeUint16(centralDirectoryHeader, nameBytes.length);
+    writeUint16(centralDirectoryHeader, 0);
+    writeUint16(centralDirectoryHeader, 0);
+    writeUint16(centralDirectoryHeader, 0);
+    writeUint16(centralDirectoryHeader, 0);
+    writeUint32(centralDirectoryHeader, 0);
+    writeUint32(centralDirectoryHeader, offset);
+
+    centralDirectoryParts.push(
+      createZipHeaderBytes(centralDirectoryHeader),
+      nameBytes,
+    );
+
+    offset += localHeaderBytes.length + nameBytes.length + entry.data.length;
+  }
+
+  const centralDirectoryOffset = offset;
+  const centralDirectory = concatZipParts(centralDirectoryParts);
+  const endOfCentralDirectory: number[] = [];
+
+  writeUint32(endOfCentralDirectory, ZIP_END_OF_CENTRAL_DIRECTORY_SIGNATURE);
+  writeUint16(endOfCentralDirectory, 0);
+  writeUint16(endOfCentralDirectory, 0);
+  writeUint16(endOfCentralDirectory, entries.length);
+  writeUint16(endOfCentralDirectory, entries.length);
+  writeUint32(endOfCentralDirectory, centralDirectory.length);
+  writeUint32(endOfCentralDirectory, centralDirectoryOffset);
+  writeUint16(endOfCentralDirectory, 0);
+
+  const zipBytes = concatZipParts([
+    ...zipParts,
+    centralDirectory,
+    createZipHeaderBytes(endOfCentralDirectory),
+  ]);
+  const zipBuffer = new ArrayBuffer(zipBytes.byteLength);
+  new Uint8Array(zipBuffer).set(zipBytes);
+
+  return new Blob([zipBuffer], { type: "application/zip" });
+}
+
+function downloadBlob(blob: Blob, fileName: string): void {
+  const downloadUrl = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = downloadUrl;
+  link.download = fileName;
+  link.style.display = "none";
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(downloadUrl);
 }
 
 async function handleExportAssignments(
@@ -660,23 +822,8 @@ async function handleExportAssignments(
       throw new Error("Read permission for the sample folder was denied.");
     }
 
-    const destinationHandle = await window.showDirectoryPicker();
-    const hasWritePermission = await ensureDirectoryPermission(
-      destinationHandle,
-      "readwrite",
-    );
+    const zipEntries: ZipEntry[] = [];
 
-    if (!hasWritePermission) {
-      throw new Error("Write permission for the export folder was denied.");
-    }
-
-    const exportFolderHandle = await destinationHandle.getDirectoryHandle(
-      `${EXPORT_FOLDER_PREFIX}-${new Date()
-        .toISOString()
-        .replaceAll(":", "-")
-        .replaceAll(".", "-")}`,
-      { create: true },
-    );
     for (const sample of assignedSamples) {
       const slotNumber = sample.slotNumber;
 
@@ -689,11 +836,17 @@ async function handleExportAssignments(
         activeDirectory.handle,
         sample.relativePath,
       );
-      await writeExportFile(exportFolderHandle, folderName, slotNumber, file);
+      zipEntries.push({
+        data: new Uint8Array(await file.arrayBuffer()),
+        path: buildExportFilePath(folderName, slotNumber, file),
+      });
     }
 
+    const fileName = EXPORT_FILE_NAME;
+    downloadBlob(createZipBlob(zipEntries), fileName);
+
     commitState({
-      success: `Export complete: ${assignedSamples.length} samples were written as WAV files to the destination folder.`,
+      success: `Export complete: ${assignedSamples.length} samples were downloaded as ${fileName}.`,
       error: null,
     });
   } catch (error) {
@@ -705,7 +858,7 @@ async function handleExportAssignments(
       error:
         error instanceof Error
           ? error.message
-          : "Folder export failed.",
+          : "Export download failed.",
     });
   }
 }

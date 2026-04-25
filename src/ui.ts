@@ -635,7 +635,16 @@ export function createUI(root: HTMLElement, handlers: UIHandlers): UIController 
               <fieldset class="theme-picker" aria-label="Accent color">
                 ${themePickerMarkup}
               </fieldset>
-              <h1>DJ Coolplay Samplepicker</h1>
+              <h1>
+                <a
+                  class="headline-title-link"
+                  href="https://open.spotify.com/artist/3nGx93gi9ipSyKlCBMTwlA?autoplay=true"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  DJ Coolplay Samplepicker
+                </a>
+              </h1>
             </div>
             <div class="headline-actions">
               <button
